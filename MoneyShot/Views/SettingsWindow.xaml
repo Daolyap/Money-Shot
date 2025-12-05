@@ -17,8 +17,47 @@
             <StackPanel>
                 <!-- General Settings -->
                 <TextBlock Text="General" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,10"/>
+                <CheckBox Name="StartInTrayCheckbox" Content="Start in system tray (only show when user requests)" Foreground="White" Margin="0,5"/>
                 <CheckBox Name="RunOnStartupCheckbox" Content="Run on Windows startup" Foreground="White" Margin="0,5"/>
                 <CheckBox Name="MinimizeToTrayCheckbox" Content="Minimize to system tray" Foreground="White" Margin="0,5"/>
+                <CheckBox Name="DisableWindowsPrintScreenCheckbox" Content="Disable Windows built-in Print Screen capture" Foreground="White" Margin="0,5">
+                    <CheckBox.ToolTip>
+                        <ToolTip Content="Disables Windows' built-in 'Use Print Screen to open screen capture' setting"/>
+                    </CheckBox.ToolTip>
+                </CheckBox>
+
+                <Separator Margin="0,20" Background="#3E3E42"/>
+
+                <!-- Hotkey Settings -->
+                <TextBlock Text="Hotkeys" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,10"/>
+                
+                <TextBlock Text="Full Screen Capture:" Foreground="White" Margin="0,5,0,2"/>
+                <ComboBox Name="HotKeyCaptureComboBox" Background="#3E3E42" Foreground="White" BorderBrush="#555" Padding="5">
+                    <ComboBoxItem Content="PrintScreen" IsSelected="True"/>
+                    <ComboBoxItem Content="Ctrl+PrintScreen"/>
+                    <ComboBoxItem Content="Alt+PrintScreen"/>
+                    <ComboBoxItem Content="Shift+PrintScreen"/>
+                    <ComboBoxItem Content="Ctrl+Shift+PrintScreen"/>
+                    <ComboBoxItem Content="F1"/>
+                    <ComboBoxItem Content="Ctrl+F1"/>
+                    <ComboBoxItem Content="Alt+F1"/>
+                    <ComboBoxItem Content="F5"/>
+                    <ComboBoxItem Content="Ctrl+F5"/>
+                </ComboBox>
+                
+                <TextBlock Text="Region Capture:" Foreground="White" Margin="0,10,0,2"/>
+                <ComboBox Name="HotKeyRegionCaptureComboBox" Background="#3E3E42" Foreground="White" BorderBrush="#555" Padding="5">
+                    <ComboBoxItem Content="PrintScreen"/>
+                    <ComboBoxItem Content="Ctrl+PrintScreen" IsSelected="True"/>
+                    <ComboBoxItem Content="Alt+PrintScreen"/>
+                    <ComboBoxItem Content="Shift+PrintScreen"/>
+                    <ComboBoxItem Content="Ctrl+Shift+PrintScreen"/>
+                    <ComboBoxItem Content="F2"/>
+                    <ComboBoxItem Content="Ctrl+F2"/>
+                    <ComboBoxItem Content="Alt+F2"/>
+                    <ComboBoxItem Content="F6"/>
+                    <ComboBoxItem Content="Ctrl+F6"/>
+                </ComboBox>
 
                 <Separator Margin="0,20" Background="#3E3E42"/>
 

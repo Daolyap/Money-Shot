@@ -1,6 +1,7 @@
 using System.Windows;
 using MoneyShot.Models;
 using MoneyShot.Services;
+using Application = System.Windows.Application;
 
 namespace MoneyShot.Views;
 
@@ -19,8 +20,10 @@ public partial class SettingsWindow : Window
 
     private void LoadSettings()
     {
+        StartInTrayCheckbox.IsChecked = _settings.StartInTray;
         RunOnStartupCheckbox.IsChecked = _settings.RunOnStartup;
         MinimizeToTrayCheckbox.IsChecked = _settings.MinimizeToTray;
+        DisableWindowsPrintScreenCheckbox.IsChecked = _settings.DisableWindowsPrintScreen;
         SavePathTextBox.Text = _settings.DefaultSavePath;
         
         SaveToClipboardRadio.IsChecked = _settings.DefaultSaveDestination == SaveDestination.Clipboard;
@@ -28,6 +31,22 @@ public partial class SettingsWindow : Window
         SaveToBothRadio.IsChecked = _settings.DefaultSaveDestination == SaveDestination.Both;
 
         FormatComboBox.SelectedItem = _settings.DefaultFileFormat;
+        
+        // Load hotkey settings
+        SelectComboBoxItem(HotKeyCaptureComboBox, _settings.HotKeyCapture);
+        SelectComboBoxItem(HotKeyRegionCaptureComboBox, _settings.HotKeyRegionCapture);
+    }
+
+    private void SelectComboBoxItem(System.Windows.Controls.ComboBox comboBox, string value)
+    {
+        foreach (System.Windows.Controls.ComboBoxItem item in comboBox.Items)
+        {
+            if (item.Content.ToString() == value)
+            {
+                item.IsSelected = true;
+                return;
+            }
+        }
     }
 
     private void BrowsePath_Click(object sender, RoutedEventArgs e)
@@ -43,8 +62,10 @@ public partial class SettingsWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        _settings.StartInTray = StartInTrayCheckbox.IsChecked ?? true;
         _settings.RunOnStartup = RunOnStartupCheckbox.IsChecked ?? false;
         _settings.MinimizeToTray = MinimizeToTrayCheckbox.IsChecked ?? false;
+        _settings.DisableWindowsPrintScreen = DisableWindowsPrintScreenCheckbox.IsChecked ?? false;
         _settings.DefaultSavePath = SavePathTextBox.Text;
 
         if (SaveToClipboardRadio.IsChecked == true)
@@ -57,10 +78,24 @@ public partial class SettingsWindow : Window
         if (FormatComboBox.SelectedItem is string format)
             _settings.DefaultFileFormat = format;
 
+        // Save hotkey settings
+        if (HotKeyCaptureComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem captureItem)
+            _settings.HotKeyCapture = captureItem.Content.ToString() ?? "PrintScreen";
+        
+        if (HotKeyRegionCaptureComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem regionItem)
+            _settings.HotKeyRegionCapture = regionItem.Content.ToString() ?? "Ctrl+PrintScreen";
+
         _settingsService.SaveSettings(_settings);
         _settingsService.SetStartupWithWindows(_settings.RunOnStartup);
+        _settingsService.SetWindowsPrintScreenDisabled(_settings.DisableWindowsPrintScreen);
 
-        MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+        // Reload hotkeys in the main window
+        if (Application.Current.MainWindow is MainWindow mainWindow)
+        {
+            mainWindow.ReloadHotKeys();
+        }
+
+        MessageBox.Show("Settings saved successfully! Hotkeys have been updated.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
         Close();
     }
 

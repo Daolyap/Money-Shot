@@ -1,5 +1,8 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Forms;
+using System.Windows.Input;
+using System.Windows.Media;
 using MoneyShot.Services;
 using MoneyShot.Views;
 using Application = System.Windows.Application;
@@ -33,21 +36,83 @@ public partial class MainWindow : Window
     {
         _hotKeyService.Initialize(this);
         RegisterHotKeys();
+        PopulateMonitorButtons();
+        
+        // Check if app should start in tray
+        var settings = _settingsService.LoadSettings();
+        if (settings.StartInTray)
+        {
+            Hide();
+        }
+    }
+
+    private void PopulateMonitorButtons()
+    {
+        var screens = _screenshotService.GetAllScreens();
+        if (screens.Count > 1)
+        {
+            var separator = new Separator
+            {
+                Margin = new Thickness(0, 10, 0, 5),
+                Background = new SolidColorBrush(Color.FromRgb(85, 85, 85))
+            };
+            MonitorButtonsPanel.Children.Add(separator);
+
+            var label = new TextBlock
+            {
+                Text = "Individual Monitors:",
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Colors.White),
+                Margin = new Thickness(0, 5, 0, 5),
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+            };
+            MonitorButtonsPanel.Children.Add(label);
+
+            for (int i = 0; i < screens.Count; i++)
+            {
+                var screenIndex = i;
+                var screen = screens[i];
+                var isPrimary = screen.Primary ? " (Primary)" : "";
+                var button = new System.Windows.Controls.Button
+                {
+                    Content = $"🖥️ Monitor {i + 1}{isPrimary}",
+                    Padding = new Thickness(20, 10, 20, 10),
+                    Margin = new Thickness(0, 3, 0, 3),
+                    FontSize = 14,
+                    Background = new SolidColorBrush(Color.FromRgb(62, 62, 66)),
+                    Foreground = new SolidColorBrush(Colors.White),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85)),
+                    Cursor = System.Windows.Input.Cursors.Hand
+                };
+                button.Click += (s, ev) => CaptureMonitor(screenIndex);
+                MonitorButtonsPanel.Children.Add(button);
+            }
+        }
     }
 
     private void RegisterHotKeys()
     {
-        // Print Screen for full screen capture
-        _hotKeyService.RegisterHotKey(0, HotKeyService.VK_SNAPSHOT, () =>
+        var settings = _settingsService.LoadSettings();
+        
+        // Register hotkeys from settings
+        _hotKeyService.RegisterHotKeyFromString(settings.HotKeyCapture, () =>
         {
             Dispatcher.Invoke(CaptureFullScreen);
         });
 
-        // Ctrl + Print Screen for region capture
-        _hotKeyService.RegisterHotKey(HotKeyService.MOD_CONTROL, HotKeyService.VK_SNAPSHOT, () =>
+        _hotKeyService.RegisterHotKeyFromString(settings.HotKeyRegionCapture, () =>
         {
             Dispatcher.Invoke(CaptureRegion);
         });
+    }
+
+    public void ReloadHotKeys()
+    {
+        // Unregister all existing hotkeys
+        _hotKeyService.UnregisterAll();
+        
+        // Re-register with new settings
+        RegisterHotKeys();
     }
 
     private void SetupSystemTray()
@@ -87,6 +152,21 @@ public partial class MainWindow : Window
         var contextMenu = new ContextMenuStrip();
         contextMenu.Items.Add("Capture Full Screen", null, (s, e) => CaptureFullScreen());
         contextMenu.Items.Add("Capture Region", null, (s, e) => CaptureRegion());
+        
+        // Add individual monitor options
+        var screens = _screenshotService.GetAllScreens();
+        if (screens.Count > 1)
+        {
+            contextMenu.Items.Add("-");
+            for (int i = 0; i < screens.Count; i++)
+            {
+                var screenIndex = i;
+                var screen = screens[i];
+                var isPrimary = screen.Primary ? " (Primary)" : "";
+                contextMenu.Items.Add($"Capture Monitor {i + 1}{isPrimary}", null, (s, e) => CaptureMonitor(screenIndex));
+            }
+        }
+        
         contextMenu.Items.Add("-");
         contextMenu.Items.Add("Settings", null, (s, e) => ShowSettings());
         contextMenu.Items.Add("-");
@@ -121,6 +201,15 @@ public partial class MainWindow : Window
         {
             ShowMainWindow();
         }
+    }
+
+    private void CaptureMonitor(int monitorIndex)
+    {
+        Hide();
+        System.Threading.Thread.Sleep(200);
+
+        var screenshot = _screenshotService.CaptureScreen(monitorIndex);
+        OpenEditor(screenshot);
     }
 
     private void OpenEditor(System.Windows.Media.Imaging.BitmapSource screenshot)
@@ -167,19 +256,22 @@ public partial class MainWindow : Window
 
     private void About_Click(object sender, RoutedEventArgs e)
     {
+        var settings = _settingsService.LoadSettings();
         System.Windows.MessageBox.Show(
             "Money Shot - Modern Screenshot Tool\n\n" +
-            "Version 1.0.0\n\n" +
+            "Version 2.0.0\n\n" +
             "A comprehensive screenshot tool for Windows 11+ with annotation capabilities.\n\n" +
             "Features:\n" +
-            "• Full screen and region capture\n" +
-            "• Rich annotation tools (shapes, text, arrows, numbers)\n" +
+            "• Full screen, region, and individual monitor capture\n" +
+            "• Multi-monitor support\n" +
+            "• Rich annotation tools (shapes, text, arrows, numbers, blur)\n" +
+            "• Customizable hotkeys\n" +
             "• Save to file or clipboard\n" +
-            "• Global hotkeys\n" +
-            "• System tray integration\n\n" +
-            "Hotkeys:\n" +
-            "• Print Screen - Capture full screen\n" +
-            "• Ctrl+Print Screen - Capture region",
+            "• System tray integration\n" +
+            "• Start in tray option\n\n" +
+            "Current Hotkeys:\n" +
+            $"• {settings.HotKeyCapture} - Capture full screen\n" +
+            $"• {settings.HotKeyRegionCapture} - Capture region",
             "About Money Shot",
             MessageBoxButton.OK,
             MessageBoxImage.Information);

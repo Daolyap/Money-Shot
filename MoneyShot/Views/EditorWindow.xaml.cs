@@ -58,6 +58,8 @@ public partial class EditorWindow : Window
             AnnotationTool.Arrow => CreateArrow(),
             AnnotationTool.Line => CreateLine(),
             AnnotationTool.Number => CreateNumberLabel(),
+            AnnotationTool.Text => CreateTextLabel(),
+            AnnotationTool.Blur => CreateBlurRectangle(),
             _ => null
         };
 
@@ -81,14 +83,17 @@ public partial class EditorWindow : Window
         switch (_currentTool)
         {
             case AnnotationTool.Rectangle:
+            case AnnotationTool.Blur:
                 UpdateRectangle(currentPoint);
                 break;
             case AnnotationTool.Circle:
                 UpdateEllipse(currentPoint);
                 break;
             case AnnotationTool.Line:
-            case AnnotationTool.Arrow:
                 UpdateLine(currentPoint);
+                break;
+            case AnnotationTool.Arrow:
+                UpdateArrow(currentPoint);
                 break;
         }
     }
@@ -163,6 +168,97 @@ public partial class EditorWindow : Window
         return textBlock;
     }
 
+    private TextBlock CreateTextLabel()
+    {
+        // Show a simple input dialog
+        var inputDialog = new Window
+        {
+            Title = "Enter Text",
+            Width = 300,
+            Height = 150,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = new SolidColorBrush(Color.FromRgb(45, 45, 48))
+        };
+
+        var grid = new Grid { Margin = new Thickness(10) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = "Enter text:",
+            Foreground = Brushes.White,
+            Margin = new Thickness(0, 0, 0, 5)
+        };
+        Grid.SetRow(label, 0);
+        grid.Children.Add(label);
+
+        var textBox = new TextBox
+        {
+            Margin = new Thickness(0, 5, 0, 10),
+            Padding = new Thickness(5),
+            Background = new SolidColorBrush(Color.FromRgb(62, 62, 66)),
+            Foreground = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85))
+        };
+        Grid.SetRow(textBox, 1);
+        grid.Children.Add(textBox);
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            Padding = new Thickness(20, 5, 20, 5),
+            Background = new SolidColorBrush(Color.FromRgb(14, 99, 156)),
+            Foreground = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(17, 119, 187)),
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        okButton.Click += (s, e) => inputDialog.DialogResult = true;
+        Grid.SetRow(okButton, 2);
+        grid.Children.Add(okButton);
+
+        inputDialog.Content = grid;
+        textBox.Focus();
+
+        var textBlock = new TextBlock
+        {
+            FontSize = 16,
+            FontWeight = FontWeights.Normal,
+            Foreground = new SolidColorBrush(_currentColor),
+            Background = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
+            Padding = new Thickness(5)
+        };
+
+        if (inputDialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(textBox.Text))
+        {
+            textBlock.Text = textBox.Text;
+        }
+        else
+        {
+            textBlock.Text = "Text";
+        }
+
+        Canvas.SetLeft(textBlock, _startPoint.X);
+        Canvas.SetTop(textBlock, _startPoint.Y);
+        _isDrawing = false; // Text doesn't need drag
+        return textBlock;
+    }
+
+    private Rectangle CreateBlurRectangle()
+    {
+        // Create a pixelated/blurred effect using a semi-transparent gray rectangle
+        var rect = new Rectangle
+        {
+            Stroke = new SolidColorBrush(Color.FromRgb(128, 128, 128)),
+            StrokeThickness = 1,
+            Fill = new SolidColorBrush(Color.FromArgb(200, 128, 128, 128)),
+            Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 20 }
+        };
+        return rect;
+    }
+
     private void UpdateRectangle(Point currentPoint)
     {
         if (_currentShape is not Rectangle rect) return;
@@ -200,6 +296,44 @@ public partial class EditorWindow : Window
             line.X2 = currentPoint.X;
             line.Y2 = currentPoint.Y;
         }
+    }
+
+    private void UpdateArrow(Point currentPoint)
+    {
+        if (_currentShape is not Path arrow) return;
+
+        var dx = currentPoint.X - _startPoint.X;
+        var dy = currentPoint.Y - _startPoint.Y;
+        var angle = Math.Atan2(dy, dx);
+        var length = Math.Sqrt(dx * dx + dy * dy);
+
+        // Create arrow geometry
+        var geometry = new PathGeometry();
+        var figure = new PathFigure { StartPoint = _startPoint };
+
+        // Arrow line
+        figure.Segments.Add(new LineSegment(currentPoint, true));
+
+        // Arrow head
+        var arrowHeadLength = Math.Min(20, length / 3);
+        var arrowHeadAngle = Math.PI / 6; // 30 degrees
+
+        var leftPoint = new Point(
+            currentPoint.X - arrowHeadLength * Math.Cos(angle - arrowHeadAngle),
+            currentPoint.Y - arrowHeadLength * Math.Sin(angle - arrowHeadAngle)
+        );
+        var rightPoint = new Point(
+            currentPoint.X - arrowHeadLength * Math.Cos(angle + arrowHeadAngle),
+            currentPoint.Y - arrowHeadLength * Math.Sin(angle + arrowHeadAngle)
+        );
+
+        figure.Segments.Add(new LineSegment(leftPoint, false));
+        figure.Segments.Add(new LineSegment(currentPoint, true));
+        figure.Segments.Add(new LineSegment(rightPoint, true));
+        figure.Segments.Add(new LineSegment(currentPoint, true));
+
+        geometry.Figures.Add(figure);
+        arrow.Data = geometry;
     }
 
     private void ToolButton_Click(object sender, RoutedEventArgs e)
