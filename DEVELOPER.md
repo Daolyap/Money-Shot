@@ -114,10 +114,36 @@ dotnet publish MoneyShot/MoneyShot.csproj \
 
 ## GitHub Actions
 
-The project includes a CI/CD workflow (`.github/workflows/build.yml`) that:
-1. Builds the application on every push
-2. Creates build artifacts
-3. Generates release packages on tagged releases
+The project includes automated CI/CD workflows:
+
+### Workflows
+
+1. **Build and Release** (`.github/workflows/release.yml`)
+   - Triggers automatically on every push to main/master branch
+   - Builds both portable ZIP and MSI installer
+   - Creates a GitHub release automatically with:
+     - Version tag: `v{version}-build.{build_number}.{commit_sha}`
+     - Both MSI and ZIP artifacts attached
+     - Generated release notes
+   - Marked as pre-release for development builds
+
+2. **Build** (`.github/workflows/build.yml`)
+   - Runs on pull requests for validation
+   - Creates build artifacts for review
+   - Ensures code builds successfully before merge
+
+3. **Build MSI Installer** (`.github/workflows/build-msi.yml`)
+   - Runs on pull requests for validation
+   - Tests MSI installer creation
+   - Can be manually triggered via workflow_dispatch
+
+### Release Process
+
+Releases are fully automated:
+- Every merge to main/master triggers a new release
+- Version is extracted from `MoneyShot/MoneyShot.csproj`
+- Build artifacts are automatically uploaded to GitHub Releases
+- Users can download the latest build from the Releases page
 
 ## Adding New Features
 
