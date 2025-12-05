@@ -58,7 +58,7 @@
 
         <!-- Footer -->
         <StackPanel Grid.Row="2" Margin="0,20,0,0">
-            <TextBlock Text="Tip: Use Print Screen for full screen, Ctrl+Print Screen for region" 
+            <TextBlock Text="Tip: Hotkeys are customizable in Settings" 
                        FontSize="12" Foreground="#888888" HorizontalAlignment="Center"/>
             <TextBlock Text="The app will minimize to system tray when closed" 
                        FontSize="12" Foreground="#888888" HorizontalAlignment="Center" Margin="0,5,0,0"/>

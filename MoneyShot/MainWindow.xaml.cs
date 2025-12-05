@@ -247,19 +247,22 @@ public partial class MainWindow : Window
 
     private void About_Click(object sender, RoutedEventArgs e)
     {
+        var settings = _settingsService.LoadSettings();
         System.Windows.MessageBox.Show(
             "Money Shot - Modern Screenshot Tool\n\n" +
-            "Version 1.0.0\n\n" +
+            "Version 2.0.0\n\n" +
             "A comprehensive screenshot tool for Windows 11+ with annotation capabilities.\n\n" +
             "Features:\n" +
-            "• Full screen and region capture\n" +
-            "• Rich annotation tools (shapes, text, arrows, numbers)\n" +
+            "• Full screen, region, and individual monitor capture\n" +
+            "• Multi-monitor support\n" +
+            "• Rich annotation tools (shapes, text, arrows, numbers, blur)\n" +
+            "• Customizable hotkeys\n" +
             "• Save to file or clipboard\n" +
-            "• Global hotkeys\n" +
-            "• System tray integration\n\n" +
-            "Hotkeys:\n" +
-            "• Print Screen - Capture full screen\n" +
-            "• Ctrl+Print Screen - Capture region",
+            "• System tray integration\n" +
+            "• Start in tray option\n\n" +
+            "Current Hotkeys:\n" +
+            $"• {settings.HotKeyCapture} - Capture full screen\n" +
+            $"• {settings.HotKeyRegionCapture} - Capture region",
             "About Money Shot",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
