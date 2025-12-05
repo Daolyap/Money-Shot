@@ -419,6 +419,10 @@ public partial class EditorWindow : Window
         {
             var element = DrawingCanvas.Children[i];
             
+            // Skip the selection border itself
+            if (element == _selectionBorder)
+                continue;
+            
             // Check if point is within element bounds
             if (IsPointInElement(element, point))
             {
@@ -437,7 +441,19 @@ public partial class EditorWindow : Window
         if (double.IsNaN(left)) left = 0;
         if (double.IsNaN(top)) top = 0;
 
-        if (element is Shape shape)
+        if (element is Path path)
+        {
+            // For paths (arrows), use geometry-based hit testing
+            if (path.Data is PathGeometry pathGeometry)
+            {
+                // Adjust point for canvas positioning
+                var adjustedPoint = new Point(point.X - left, point.Y - top);
+                return pathGeometry.FillContains(adjustedPoint) || 
+                       pathGeometry.StrokeContains(new Pen(Brushes.Black, 10), adjustedPoint);
+            }
+            return false;
+        }
+        else if (element is Shape shape && !(element is Line))
         {
             var width = shape.Width;
             var height = shape.Height;
@@ -503,7 +519,16 @@ public partial class EditorWindow : Window
         
         double width = 0, height = 0;
         
-        if (element is Shape shape)
+        if (element is Path path)
+        {
+            // For paths, get bounds from geometry
+            var bounds = path.Data.Bounds;
+            left += bounds.Left;
+            top += bounds.Top;
+            width = bounds.Width;
+            height = bounds.Height;
+        }
+        else if (element is Shape shape && !(element is Line))
         {
             width = shape.Width;
             height = shape.Height;
@@ -572,17 +597,15 @@ public partial class EditorWindow : Window
         }
         else if (element is Path path)
         {
-            // For paths (arrows), we need to transform the geometry
-            var transform = new TranslateTransform(deltaX, deltaY);
-            if (path.RenderTransform is TranslateTransform existing)
-            {
-                existing.X += deltaX;
-                existing.Y += deltaY;
-            }
-            else
-            {
-                path.RenderTransform = transform;
-            }
+            // For paths (arrows), use Canvas positioning like other elements
+            var left = Canvas.GetLeft(path);
+            var top = Canvas.GetTop(path);
+            
+            if (double.IsNaN(left)) left = 0;
+            if (double.IsNaN(top)) top = 0;
+            
+            Canvas.SetLeft(path, left + deltaX);
+            Canvas.SetTop(path, top + deltaY);
         }
         
         // Update selection border position
