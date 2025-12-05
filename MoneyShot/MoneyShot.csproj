@@ -9,6 +9,13 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>favicon.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company>Money Shot</Company>
+    <Product>Money Shot Screenshot Tool</Product>
+    <Description>A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive annotation capabilities.</Description>
+    <Copyright>Copyright © 2024</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

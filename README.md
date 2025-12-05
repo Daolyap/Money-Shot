@@ -33,13 +33,20 @@ A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive 
 
 ## 🚀 Installation
 
-### Option 1: Download Release (Recommended)
+### Option 1: MSI Installer (Recommended)
+1. Go to [Releases](https://github.com/Daolyap/Money-Shot/releases)
+2. Download the latest `MoneyShot-v*.msi` file
+3. Run the MSI installer
+4. The application will be installed to `Program Files\Money Shot`
+5. Shortcuts will be created on the Desktop and Start Menu
+
+### Option 2: Portable ZIP
 1. Go to [Releases](https://github.com/Daolyap/Money-Shot/releases)
 2. Download the latest `MoneyShot-Release.zip`
 3. Extract the ZIP file
 4. Run `MoneyShot.exe`
 
-### Option 2: Build from Source
+### Option 3: Build from Source
 ```bash
 # Clone the repository
 git clone https://github.com/Daolyap/Money-Shot.git
@@ -117,13 +124,13 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] Windows startup integration
 - [x] Modern UI
 - [x] GitHub Actions build workflow
-- [ ] Blur/pixelate tool
-- [ ] Advanced text tool with font selection
+- [x] MSI Installer package
+- [x] Advanced text tool with font selection
+- [x] Blur/pixelate tool
 - [ ] Freehand drawing
 - [ ] Image effects (drop shadow, borders)
 - [ ] Screenshot history
 - [ ] Quick share to cloud services
-- [ ] MSI Installer package
 - [ ] Auto-update functionality
 
 ## 📄 License

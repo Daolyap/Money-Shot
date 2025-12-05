@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Money Shot"
+           Manufacturer="Money Shot"
+           Version="1.0.0"
+           UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+    
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Define the directory structure -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Money Shot">
+        <Component Id="MainExecutable" Bitness="always64">
+          <File Id="MoneyShotExe" 
+                Source="$(var.PublishDir)\MoneyShot.exe" 
+                KeyPath="yes">
+            <Shortcut Id="StartMenuShortcut"
+                      Directory="ProgramMenuFolder"
+                      Name="Money Shot"
+                      Description="Modern screenshot tool with annotation capabilities"
+                      WorkingDirectory="INSTALLFOLDER"
+                      Icon="MoneyShotIcon.exe"
+                      Advertise="yes" />
+            <Shortcut Id="DesktopShortcut"
+                      Directory="DesktopFolder"
+                      Name="Money Shot"
+                      Description="Modern screenshot tool with annotation capabilities"
+                      WorkingDirectory="INSTALLFOLDER"
+                      Icon="MoneyShotIcon.exe"
+                      Advertise="yes" />
+          </File>
+        </Component>
+        
+        <!-- Include all published files -->
+        <!-- Note: Files are explicitly listed for clarity and control.
+             For larger applications, consider using WiX heat tool to auto-harvest files. -->
+        <Component Id="PublishedFiles" Bitness="always64">
+          <File Id="MoneyShotDll" Source="$(var.PublishDir)\MoneyShot.dll" />
+          <File Id="MoneyShotRuntimeConfig" Source="$(var.PublishDir)\MoneyShot.runtimeconfig.json" />
+          <File Id="MoneyShotDepsJson" Source="$(var.PublishDir)\MoneyShot.deps.json" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder" />
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!-- Define features -->
+    <Feature Id="ProductFeature" Title="Money Shot" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="PublishedFiles" />
+    </Feature>
+
+    <!-- Icon for shortcuts and Add/Remove Programs -->
+    <Icon Id="MoneyShotIcon.exe" SourceFile="$(var.PublishDir)\MoneyShot.exe" />
+    <Property Id="ARPPRODUCTICON" Value="MoneyShotIcon.exe" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/Daolyap/Money-Shot" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Daolyap/Money-Shot" />
+  </Package>
+</Wix>
