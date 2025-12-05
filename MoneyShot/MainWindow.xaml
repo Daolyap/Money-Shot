@@ -31,14 +31,14 @@
                     <TextBlock Text="Capture Options" FontSize="20" FontWeight="Bold" Foreground="White" Margin="0,0,0,20" HorizontalAlignment="Center"/>
                     
                     <Button Name="CaptureFullScreenButton" Content="📸 Capture Full Screen" Click="CaptureFullScreen_Click" 
-                            Padding="20,15" Margin="0,5" FontSize="16" Background="#0E639C" Foreground="White" BorderBrush="#1177BB" Cursor="Hand" MinWidth="250">
+                            Padding="20,15" Margin="0,5" FontSize="16" Background="#0E639C" Foreground="White" BorderBrush="#1177BB" Cursor="Hand">
                         <Button.ToolTip>
                             <ToolTip Content="Capture all screens (Hotkey: Print Screen)"/>
                         </Button.ToolTip>
                     </Button>
                     
                     <Button Name="CaptureRegionButton" Content="✂️ Capture Region" Click="CaptureRegion_Click" 
-                            Padding="20,15" Margin="0,5" FontSize="16" Background="#0E639C" Foreground="White" BorderBrush="#1177BB" Cursor="Hand" MinWidth="250">
+                            Padding="20,15" Margin="0,5" FontSize="16" Background="#0E639C" Foreground="White" BorderBrush="#1177BB" Cursor="Hand">
                         <Button.ToolTip>
                             <ToolTip Content="Select a region to capture (Hotkey: Ctrl+Print Screen)"/>
                         </Button.ToolTip>

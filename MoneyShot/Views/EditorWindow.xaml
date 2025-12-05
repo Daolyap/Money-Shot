@@ -14,15 +14,13 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <!-- Tool Selection -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
-                    <Button Content="↖️ Cursor" Tag="Cursor" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
-                    <Button Content="✂️ Crop" Tag="Crop" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="✏️ Rectangle" Tag="Rectangle" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="⭕ Circle" Tag="Circle" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="➡️ Arrow" Tag="Arrow" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="📏 Line" Tag="Line" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="🔢 Number" Tag="Number" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="📝 Text" Tag="Text" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
-                    <Button Content="⬛ Blur" Tag="Blur" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
+                    <Button Content="🔲 Blur" Tag="Blur" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                 </StackPanel>
 
                 <!-- Color Selection -->
@@ -40,9 +38,6 @@
                 <!-- Actions -->
                 <StackPanel Orientation="Horizontal">
                     <Button Content="↶ Undo" Click="Undo_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
-                    <Button Content="🔍+ Zoom In" Click="ZoomIn_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
-                    <Button Content="🔍- Zoom Out" Click="ZoomOut_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
-                    <Button Content="🔍 Reset" Click="ZoomReset_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="💾 Save" Click="Save_Click" Margin="5,0" Padding="10,5" Background="#0E639C" Foreground="White" BorderBrush="#1177BB"/>
                     <Button Content="📋 Copy" Click="SaveToClipboard_Click" Margin="5,0" Padding="10,5" Background="#0E639C" Foreground="White" BorderBrush="#1177BB"/>
                 </StackPanel>
@@ -52,9 +47,6 @@
         <!-- Main Canvas Area -->
         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#1E1E1E">
             <Grid Name="ImageCanvas" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Grid.RenderTransform>
-                    <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1" CenterX="0" CenterY="0"/>
-                </Grid.RenderTransform>
                 <Image Name="ImageDisplay"/>
                 <Canvas Name="DrawingCanvas" 
                         MouseDown="Canvas_MouseDown"

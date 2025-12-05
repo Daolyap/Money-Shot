@@ -21,23 +21,6 @@ public partial class EditorWindow : Window
     private readonly SaveService _saveService;
     private readonly Stack<UIElement> _undoStack = new();
     private int _numberCounter = 1;
-    
-    // Selection/move fields
-    private UIElement? _selectedElement;
-    private Point _dragStartPoint;
-    private bool _isDragging;
-    private Border? _selectionBorder;
-    private double _zoomLevel = 1.0;
-    private const double ZoomIncrement = 0.25;
-    private const double MinZoom = 0.25;
-    private const double MaxZoom = 4.0;
-    
-    // Crop fields
-    private Rectangle? _cropRectangle;
-    private bool _isCropping;
-    
-    // Cached pen for hit testing to avoid repeated allocations
-    private static readonly Pen HitTestPen = new(Brushes.Black, 10);
 
     public EditorWindow(BitmapSource image)
     {
@@ -46,26 +29,6 @@ public partial class EditorWindow : Window
         _saveService = new SaveService();
         DisplayImage();
         SetupToolbar();
-        
-        // Add keyboard event handler for Delete key
-        KeyDown += EditorWindow_KeyDown;
-    }
-    
-    private void EditorWindow_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Delete && _selectedElement != null)
-        {
-            DeleteSelectedElement();
-        }
-    }
-    
-    private void DeleteSelectedElement()
-    {
-        if (_selectedElement != null)
-        {
-            DrawingCanvas.Children.Remove(_selectedElement);
-            ClearSelection();
-        }
     }
 
     private void DisplayImage()
@@ -73,10 +36,6 @@ public partial class EditorWindow : Window
         ImageDisplay.Source = _originalImage;
         ImageDisplay.Width = _originalImage.PixelWidth;
         ImageDisplay.Height = _originalImage.PixelHeight;
-        
-        // Update canvas size to match image
-        DrawingCanvas.Width = _originalImage.PixelWidth;
-        DrawingCanvas.Height = _originalImage.PixelHeight;
     }
 
     private void SetupToolbar()
@@ -86,59 +45,11 @@ public partial class EditorWindow : Window
 
     private void Canvas_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed)
-            return;
-
-        var clickPoint = e.GetPosition(DrawingCanvas);
-
-        // Handle cursor mode for selection and moving
-        if (_currentTool == AnnotationTool.Cursor)
-        {
-            // Try to find an element at the click position
-            var hitElement = FindElementAtPoint(clickPoint);
-            
-            if (hitElement != null)
-            {
-                SelectElement(hitElement);
-                _isDragging = true;
-                _dragStartPoint = clickPoint;
-            }
-            else
-            {
-                ClearSelection();
-            }
-            return;
-        }
-
-        // Handle crop mode
-        if (_currentTool == AnnotationTool.Crop)
-        {
-            _isCropping = true;
-            _startPoint = clickPoint;
-            
-            // Remove existing crop rectangle if any
-            if (_cropRectangle != null)
-            {
-                DrawingCanvas.Children.Remove(_cropRectangle);
-            }
-            
-            _cropRectangle = new Rectangle
-            {
-                Stroke = new SolidColorBrush(Colors.Yellow),
-                StrokeThickness = 2,
-                StrokeDashArray = new System.Windows.Media.DoubleCollection(new[] { 4.0, 2.0 }),
-                Fill = new SolidColorBrush(Color.FromArgb(50, 255, 255, 0))
-            };
-            
-            DrawingCanvas.Children.Add(_cropRectangle);
-            return;
-        }
-
-        if (_currentTool == AnnotationTool.None)
+        if (_currentTool == AnnotationTool.None || e.LeftButton != MouseButtonState.Pressed)
             return;
 
         _isDrawing = true;
-        _startPoint = clickPoint;
+        _startPoint = e.GetPosition(DrawingCanvas);
 
         UIElement? element = _currentTool switch
         {
@@ -164,36 +75,10 @@ public partial class EditorWindow : Window
 
     private void Canvas_MouseMove(object sender, MouseEventArgs e)
     {
-        var currentPoint = e.GetPosition(DrawingCanvas);
-
-        // Handle cursor mode for dragging elements
-        if (_currentTool == AnnotationTool.Cursor && _isDragging && _selectedElement != null)
-        {
-            var deltaX = currentPoint.X - _dragStartPoint.X;
-            var deltaY = currentPoint.Y - _dragStartPoint.Y;
-            
-            MoveElement(_selectedElement, deltaX, deltaY);
-            _dragStartPoint = currentPoint;
-            return;
-        }
-
-        // Handle crop mode
-        if (_currentTool == AnnotationTool.Crop && _isCropping && _cropRectangle != null)
-        {
-            var x = Math.Min(_startPoint.X, currentPoint.X);
-            var y = Math.Min(_startPoint.Y, currentPoint.Y);
-            var width = Math.Abs(_startPoint.X - currentPoint.X);
-            var height = Math.Abs(_startPoint.Y - currentPoint.Y);
-
-            Canvas.SetLeft(_cropRectangle, x);
-            Canvas.SetTop(_cropRectangle, y);
-            _cropRectangle.Width = width;
-            _cropRectangle.Height = height;
-            return;
-        }
-
         if (!_isDrawing || _currentShape == null)
             return;
+
+        var currentPoint = e.GetPosition(DrawingCanvas);
 
         switch (_currentTool)
         {
@@ -215,38 +100,6 @@ public partial class EditorWindow : Window
 
     private void Canvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (_currentTool == AnnotationTool.Cursor)
-        {
-            _isDragging = false;
-            return;
-        }
-
-        if (_currentTool == AnnotationTool.Crop && _isCropping)
-        {
-            _isCropping = false;
-            if (_cropRectangle != null && _cropRectangle.Width > 10 && _cropRectangle.Height > 10)
-            {
-                // Ask user to confirm crop
-                var result = MessageBox.Show(
-                    "Apply crop to image? This will remove all annotations and crop the image.",
-                    "Confirm Crop",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
-
-                if (result == MessageBoxResult.Yes)
-                {
-                    ApplyCrop();
-                }
-                else
-                {
-                    // Remove crop rectangle
-                    DrawingCanvas.Children.Remove(_cropRectangle);
-                    _cropRectangle = null;
-                }
-            }
-            return;
-        }
-
         if (_isDrawing && _currentShape != null)
         {
             _undoStack.Push(_currentShape);
@@ -395,18 +248,13 @@ public partial class EditorWindow : Window
 
     private Rectangle CreateBlurRectangle()
     {
-        // Create an effective blur/pixelate effect that obscures content
+        // Create a pixelated/blurred effect using a semi-transparent gray rectangle
         var rect = new Rectangle
         {
-            Stroke = new SolidColorBrush(Colors.Transparent),
-            StrokeThickness = 0,
-            // Use a solid opaque fill with strong blur for effective obscuring
-            Fill = new SolidColorBrush(Color.FromArgb(255, 150, 150, 150)),
-            Effect = new System.Windows.Media.Effects.BlurEffect 
-            { 
-                Radius = 60, 
-                KernelType = System.Windows.Media.Effects.KernelType.Box 
-            }
+            Stroke = new SolidColorBrush(Color.FromRgb(128, 128, 128)),
+            StrokeThickness = 1,
+            Fill = new SolidColorBrush(Color.FromArgb(200, 128, 128, 128)),
+            Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 20 }
         };
         return rect;
     }
@@ -488,224 +336,11 @@ public partial class EditorWindow : Window
         arrow.Data = geometry;
     }
 
-    private UIElement? FindElementAtPoint(Point point)
-    {
-        // Search through canvas children in reverse order (top to bottom)
-        for (int i = DrawingCanvas.Children.Count - 1; i >= 0; i--)
-        {
-            var element = DrawingCanvas.Children[i];
-            
-            // Skip the selection border itself
-            if (element == _selectionBorder)
-                continue;
-            
-            // Check if point is within element bounds
-            if (IsPointInElement(element, point))
-            {
-                return element;
-            }
-        }
-        return null;
-    }
-
-    private bool IsPointInElement(UIElement element, Point point)
-    {
-        var left = Canvas.GetLeft(element);
-        var top = Canvas.GetTop(element);
-        
-        // Handle NaN values (elements without explicit positioning)
-        if (double.IsNaN(left)) left = 0;
-        if (double.IsNaN(top)) top = 0;
-
-        if (element is Path path)
-        {
-            // For paths (arrows), use geometry-based hit testing
-            if (path.Data is PathGeometry pathGeometry)
-            {
-                // Adjust point for canvas positioning
-                var adjustedPoint = new Point(point.X - left, point.Y - top);
-                return pathGeometry.FillContains(adjustedPoint) || 
-                       pathGeometry.StrokeContains(HitTestPen, adjustedPoint);
-            }
-            return false;
-        }
-        else if (element is Shape shape && !(element is Line))
-        {
-            var width = shape.Width;
-            var height = shape.Height;
-            
-            if (double.IsNaN(width) || double.IsNaN(height))
-                return false;
-                
-            return point.X >= left && point.X <= left + width &&
-                   point.Y >= top && point.Y <= top + height;
-        }
-        else if (element is TextBlock textBlock)
-        {
-            var width = textBlock.ActualWidth;
-            var height = textBlock.ActualHeight;
-            
-            return point.X >= left && point.X <= left + width &&
-                   point.Y >= top && point.Y <= top + height;
-        }
-        else if (element is Line line)
-        {
-            // Check if point is near the line
-            var distance = DistanceFromPointToLine(point, new Point(line.X1, line.Y1), new Point(line.X2, line.Y2));
-            return distance < 10; // 10 pixel tolerance
-        }
-        
-        return false;
-    }
-
-    private double DistanceFromPointToLine(Point p, Point lineStart, Point lineEnd)
-    {
-        var dx = lineEnd.X - lineStart.X;
-        var dy = lineEnd.Y - lineStart.Y;
-        var lengthSquared = dx * dx + dy * dy;
-        
-        if (lengthSquared == 0)
-            return Math.Sqrt((p.X - lineStart.X) * (p.X - lineStart.X) + (p.Y - lineStart.Y) * (p.Y - lineStart.Y));
-        
-        var t = Math.Max(0, Math.Min(1, ((p.X - lineStart.X) * dx + (p.Y - lineStart.Y) * dy) / lengthSquared));
-        var projX = lineStart.X + t * dx;
-        var projY = lineStart.Y + t * dy;
-        
-        return Math.Sqrt((p.X - projX) * (p.X - projX) + (p.Y - projY) * (p.Y - projY));
-    }
-
-    private void SelectElement(UIElement element)
-    {
-        ClearSelection();
-        _selectedElement = element;
-        
-        // Add visual indicator for selection
-        _selectionBorder = new Border
-        {
-            BorderBrush = new SolidColorBrush(Colors.Blue),
-            BorderThickness = new Thickness(2),
-            IsHitTestVisible = false
-        };
-        
-        var left = Canvas.GetLeft(element);
-        var top = Canvas.GetTop(element);
-        
-        if (double.IsNaN(left)) left = 0;
-        if (double.IsNaN(top)) top = 0;
-        
-        double width = 0, height = 0;
-        
-        if (element is Path path)
-        {
-            // For paths, get bounds from geometry
-            var bounds = path.Data.Bounds;
-            left += bounds.Left;
-            top += bounds.Top;
-            width = bounds.Width;
-            height = bounds.Height;
-        }
-        else if (element is Shape shape && !(element is Line))
-        {
-            width = shape.Width;
-            height = shape.Height;
-        }
-        else if (element is TextBlock textBlock)
-        {
-            width = textBlock.ActualWidth;
-            height = textBlock.ActualHeight;
-        }
-        else if (element is Line line)
-        {
-            left = Math.Min(line.X1, line.X2);
-            top = Math.Min(line.Y1, line.Y2);
-            width = Math.Abs(line.X2 - line.X1);
-            height = Math.Abs(line.Y2 - line.Y1);
-        }
-        
-        Canvas.SetLeft(_selectionBorder, left - 2);
-        Canvas.SetTop(_selectionBorder, top - 2);
-        _selectionBorder.Width = width + 4;
-        _selectionBorder.Height = height + 4;
-        
-        DrawingCanvas.Children.Add(_selectionBorder);
-    }
-
-    private void ClearSelection()
-    {
-        if (_selectionBorder != null)
-        {
-            DrawingCanvas.Children.Remove(_selectionBorder);
-            _selectionBorder = null;
-        }
-        _selectedElement = null;
-    }
-
-    private void MoveElement(UIElement element, double deltaX, double deltaY)
-    {
-        if (element is Shape shape && !(element is Line))
-        {
-            var left = Canvas.GetLeft(shape);
-            var top = Canvas.GetTop(shape);
-            
-            if (double.IsNaN(left)) left = 0;
-            if (double.IsNaN(top)) top = 0;
-            
-            Canvas.SetLeft(shape, left + deltaX);
-            Canvas.SetTop(shape, top + deltaY);
-        }
-        else if (element is TextBlock textBlock)
-        {
-            var left = Canvas.GetLeft(textBlock);
-            var top = Canvas.GetTop(textBlock);
-            
-            if (double.IsNaN(left)) left = 0;
-            if (double.IsNaN(top)) top = 0;
-            
-            Canvas.SetLeft(textBlock, left + deltaX);
-            Canvas.SetTop(textBlock, top + deltaY);
-        }
-        else if (element is Line line)
-        {
-            line.X1 += deltaX;
-            line.Y1 += deltaY;
-            line.X2 += deltaX;
-            line.Y2 += deltaY;
-        }
-        else if (element is Path path)
-        {
-            // For paths (arrows), use Canvas positioning like other elements
-            var left = Canvas.GetLeft(path);
-            var top = Canvas.GetTop(path);
-            
-            if (double.IsNaN(left)) left = 0;
-            if (double.IsNaN(top)) top = 0;
-            
-            Canvas.SetLeft(path, left + deltaX);
-            Canvas.SetTop(path, top + deltaY);
-        }
-        
-        // Update selection border position
-        if (_selectionBorder != null)
-        {
-            var borderLeft = Canvas.GetLeft(_selectionBorder);
-            var borderTop = Canvas.GetTop(_selectionBorder);
-            
-            if (double.IsNaN(borderLeft)) borderLeft = 0;
-            if (double.IsNaN(borderTop)) borderTop = 0;
-            
-            Canvas.SetLeft(_selectionBorder, borderLeft + deltaX);
-            Canvas.SetTop(_selectionBorder, borderTop + deltaY);
-        }
-    }
-
     private void ToolButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.Tag is string toolName)
         {
-            if (Enum.TryParse<AnnotationTool>(toolName, out var tool))
-            {
-                _currentTool = tool;
-            }
+            _currentTool = Enum.Parse<AnnotationTool>(toolName);
         }
     }
 
@@ -723,65 +358,6 @@ public partial class EditorWindow : Window
         {
             var element = _undoStack.Pop();
             DrawingCanvas.Children.Remove(element);
-        }
-    }
-
-    private void ApplyCrop()
-    {
-        if (_cropRectangle == null) return;
-
-        var cropX = Canvas.GetLeft(_cropRectangle);
-        var cropY = Canvas.GetTop(_cropRectangle);
-        var cropWidth = _cropRectangle.Width;
-        var cropHeight = _cropRectangle.Height;
-
-        // Validate and clamp crop dimensions
-        cropX = Math.Max(0, cropX);
-        cropY = Math.Max(0, cropY);
-        cropX = Math.Min(cropX, _originalImage.PixelWidth - 1);
-        cropY = Math.Min(cropY, _originalImage.PixelHeight - 1);
-        
-        cropWidth = Math.Min(cropWidth, _originalImage.PixelWidth - cropX);
-        cropHeight = Math.Min(cropHeight, _originalImage.PixelHeight - cropY);
-        
-        // Ensure positive dimensions
-        var intCropX = (int)Math.Round(cropX);
-        var intCropY = (int)Math.Round(cropY);
-        var intCropWidth = (int)Math.Round(cropWidth);
-        var intCropHeight = (int)Math.Round(cropHeight);
-        
-        if (intCropWidth <= 0 || intCropHeight <= 0)
-        {
-            MessageBox.Show("Invalid crop dimensions.", "Crop Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            DrawingCanvas.Children.Remove(_cropRectangle);
-            _cropRectangle = null;
-            return;
-        }
-
-        try
-        {
-            // Create cropped bitmap
-            var croppedBitmap = new CroppedBitmap(_originalImage,
-                new Int32Rect(intCropX, intCropY, intCropWidth, intCropHeight));
-
-            // Update the image
-            _originalImage = croppedBitmap;
-            DisplayImage();
-
-            // Clear all annotations including crop rectangle
-            DrawingCanvas.Children.Clear();
-            _undoStack.Clear();
-            _cropRectangle = null;
-            _numberCounter = 1;
-
-            // Reset to cursor tool
-            _currentTool = AnnotationTool.Cursor;
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Failed to apply crop: {ex.Message}", "Crop Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            DrawingCanvas.Children.Remove(_cropRectangle);
-            _cropRectangle = null;
         }
     }
 
@@ -820,36 +396,6 @@ public partial class EditorWindow : Window
         var finalImage = CaptureCanvasAsImage();
         _saveService.SaveToClipboard(finalImage);
         MessageBox.Show("Image copied to clipboard!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    private void ZoomIn_Click(object sender, RoutedEventArgs e)
-    {
-        if (_zoomLevel < MaxZoom)
-        {
-            _zoomLevel += ZoomIncrement;
-            ApplyZoom();
-        }
-    }
-
-    private void ZoomOut_Click(object sender, RoutedEventArgs e)
-    {
-        if (_zoomLevel > MinZoom)
-        {
-            _zoomLevel -= ZoomIncrement;
-            ApplyZoom();
-        }
-    }
-
-    private void ZoomReset_Click(object sender, RoutedEventArgs e)
-    {
-        _zoomLevel = 1.0;
-        ApplyZoom();
-    }
-
-    private void ApplyZoom()
-    {
-        ZoomTransform.ScaleX = _zoomLevel;
-        ZoomTransform.ScaleY = _zoomLevel;
     }
 
     private BitmapSource CaptureCanvasAsImage()
