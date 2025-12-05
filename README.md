@@ -40,9 +40,11 @@ A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive 
 4. The application will be installed to `Program Files\Money Shot`
 5. Shortcuts will be created on the Desktop and Start Menu
 
+> **Note**: Releases are automatically created with each update to the main branch. Look for the latest build with both MSI and ZIP downloads.
+
 ### Option 2: Portable ZIP
 1. Go to [Releases](https://github.com/Daolyap/Money-Shot/releases)
-2. Download the latest `MoneyShot-Release.zip`
+2. Download the latest `MoneyShot-v*.zip` file
 3. Extract the ZIP file
 4. Run `MoneyShot.exe`
 
