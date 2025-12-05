@@ -12,6 +12,8 @@ public partial class RegionSelector : Window
     private Point _startPoint;
     private Rectangle? _selectionRectangle;
     private bool _isSelecting;
+    private int _virtualScreenLeft;
+    private int _virtualScreenTop;
 
     public DrawingRectangle? SelectedRegion { get; private set; }
 
@@ -23,12 +25,40 @@ public partial class RegionSelector : Window
 
     private void SetupFullScreenOverlay()
     {
+        // Calculate virtual screen bounds (all monitors)
+        int minX = int.MaxValue;
+        int minY = int.MaxValue;
+        int maxX = int.MinValue;
+        int maxY = int.MinValue;
+
+        foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+        {
+            minX = Math.Min(minX, screen.Bounds.Left);
+            minY = Math.Min(minY, screen.Bounds.Top);
+            maxX = Math.Max(maxX, screen.Bounds.Right);
+            maxY = Math.Max(maxY, screen.Bounds.Bottom);
+        }
+
+        _virtualScreenLeft = minX;
+        _virtualScreenTop = minY;
+
+        // Set window to cover all screens
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        WindowState = WindowState.Maximized;
+        AllowsTransparency = true;
         Topmost = true;
+        
+        // Position and size to cover entire virtual screen
+        Left = minX;
+        Top = minY;
+        Width = maxX - minX;
+        Height = maxY - minY;
+        
         Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0));
         Cursor = Cursors.Cross;
+        
+        // Show immediately to prevent black screen
+        ShowInTaskbar = false;
     }
 
     private void Window_MouseDown(object sender, MouseButtonEventArgs e)
@@ -82,7 +112,12 @@ public partial class RegionSelector : Window
 
             if (width > 10 && height > 10)
             {
-                SelectedRegion = new DrawingRectangle(x, y, width, height);
+                // Adjust coordinates to account for virtual screen offset
+                // The canvas is positioned relative to the window, which starts at virtual screen origin
+                var absoluteX = x + _virtualScreenLeft;
+                var absoluteY = y + _virtualScreenTop;
+                
+                SelectedRegion = new DrawingRectangle(absoluteX, absoluteY, width, height);
                 DialogResult = true;
             }
             else
