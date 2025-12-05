@@ -1,0 +1,104 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using DrawingRectangle = System.Drawing.Rectangle;
+
+namespace MoneyShot.Views;
+
+public partial class RegionSelector : Window
+{
+    private Point _startPoint;
+    private Rectangle? _selectionRectangle;
+    private bool _isSelecting;
+
+    public DrawingRectangle? SelectedRegion { get; private set; }
+
+    public RegionSelector()
+    {
+        InitializeComponent();
+        SetupFullScreenOverlay();
+    }
+
+    private void SetupFullScreenOverlay()
+    {
+        WindowStyle = WindowStyle.None;
+        ResizeMode = ResizeMode.NoResize;
+        WindowState = WindowState.Maximized;
+        Topmost = true;
+        Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0));
+        Cursor = Cursors.Cross;
+    }
+
+    private void Window_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.LeftButton == MouseButtonState.Pressed)
+        {
+            _isSelecting = true;
+            _startPoint = e.GetPosition(this);
+
+            _selectionRectangle = new Rectangle
+            {
+                Stroke = Brushes.Red,
+                StrokeThickness = 2,
+                Fill = new SolidColorBrush(Color.FromArgb(50, 255, 0, 0))
+            };
+
+            Canvas.SetLeft(_selectionRectangle, _startPoint.X);
+            Canvas.SetTop(_selectionRectangle, _startPoint.Y);
+            SelectionCanvas.Children.Add(_selectionRectangle);
+        }
+    }
+
+    private void Window_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_isSelecting && _selectionRectangle != null)
+        {
+            var currentPoint = e.GetPosition(this);
+
+            var x = Math.Min(_startPoint.X, currentPoint.X);
+            var y = Math.Min(_startPoint.Y, currentPoint.Y);
+            var width = Math.Abs(_startPoint.X - currentPoint.X);
+            var height = Math.Abs(_startPoint.Y - currentPoint.Y);
+
+            Canvas.SetLeft(_selectionRectangle, x);
+            Canvas.SetTop(_selectionRectangle, y);
+            _selectionRectangle.Width = width;
+            _selectionRectangle.Height = height;
+        }
+    }
+
+    private void Window_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_isSelecting && _selectionRectangle != null)
+        {
+            _isSelecting = false;
+
+            var x = (int)Canvas.GetLeft(_selectionRectangle);
+            var y = (int)Canvas.GetTop(_selectionRectangle);
+            var width = (int)_selectionRectangle.Width;
+            var height = (int)_selectionRectangle.Height;
+
+            if (width > 10 && height > 10)
+            {
+                SelectedRegion = new DrawingRectangle(x, y, width, height);
+                DialogResult = true;
+            }
+            else
+            {
+                DialogResult = false;
+            }
+            Close();
+        }
+    }
+
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            DialogResult = false;
+            Close();
+        }
+    }
+}

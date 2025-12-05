@@ -1,0 +1,10 @@
+<Window x:Class="MoneyShot.Views.RegionSelector"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Region" 
+        MouseDown="Window_MouseDown"
+        MouseMove="Window_MouseMove"
+        MouseUp="Window_MouseUp"
+        KeyDown="Window_KeyDown">
+    <Canvas Name="SelectionCanvas"/>
+</Window>
