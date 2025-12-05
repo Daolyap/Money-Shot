@@ -1,0 +1,62 @@
+name: Build MSI Installer
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore MoneyShot/MoneyShot.csproj
+
+    - name: Build
+      run: dotnet build MoneyShot/MoneyShot.csproj --configuration Release --no-restore
+
+    - name: Publish
+      run: dotnet publish MoneyShot/MoneyShot.csproj --configuration Release --output ./publish --no-build --self-contained false
+
+    - name: Install WiX Toolset
+      run: |
+        dotnet tool install --global wix --version 5.0.2
+        wix extension add -g WixToolset.UI.wixext
+        wix extension add -g WixToolset.Util.wixext
+
+    - name: Build MSI
+      run: |
+        wix build -arch x64 -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext `
+          -d PublishDir="${{ github.workspace }}\publish" `
+          -out MoneyShot.msi `
+          Installer/Product.wxs
+
+    - name: Upload MSI artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MoneyShot-MSI
+        path: MoneyShot.msi
+
+    - name: Upload Release Asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./MoneyShot.msi
+        asset_name: MoneyShot-v${{ github.event.release.tag_name }}.msi
+        asset_content_type: application/x-msi
