@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using MoneyShot.Models;
 using MoneyShot.Services;
@@ -51,12 +52,29 @@ public partial class SettingsWindow : Window
 
     private void BrowsePath_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new System.Windows.Forms.FolderBrowserDialog();
-        dialog.SelectedPath = _settings.DefaultSavePath;
-        
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        try
         {
-            SavePathTextBox.Text = dialog.SelectedPath;
+            var dialog = new System.Windows.Forms.FolderBrowserDialog();
+            dialog.SelectedPath = _settings.DefaultSavePath;
+            
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                // Validate the selected path
+                if (!string.IsNullOrWhiteSpace(dialog.SelectedPath) && Directory.Exists(dialog.SelectedPath))
+                {
+                    SavePathTextBox.Text = dialog.SelectedPath;
+                }
+                else
+                {
+                    MessageBox.Show("The selected folder is invalid.", "Invalid Folder", 
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error selecting folder: {ex.Message}", "Error", 
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

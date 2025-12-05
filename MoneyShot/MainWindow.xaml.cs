@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
@@ -123,7 +124,7 @@ public partial class MainWindow : Window
             var iconPath = processModule?.FileName;
             
             System.Drawing.Icon? icon = null;
-            if (iconPath != null)
+            if (iconPath != null && File.Exists(iconPath))
             {
                 icon = System.Drawing.Icon.ExtractAssociatedIcon(iconPath);
             }
@@ -138,9 +139,11 @@ public partial class MainWindow : Window
                 Text = "Money Shot - Screenshot Tool"
             };
         }
-        catch
+        catch (Exception ex)
         {
-            // If setup fails, use default icon
+            // Log the error and use default icon
+            System.Diagnostics.Debug.WriteLine($"Error setting up system tray icon: {ex.Message}");
+            
             _notifyIcon = new NotifyIcon
             {
                 Icon = System.Drawing.SystemIcons.Application,
@@ -179,46 +182,88 @@ public partial class MainWindow : Window
 
     private void CaptureFullScreen()
     {
-        Hide();
-        System.Threading.Thread.Sleep(200); // Small delay to hide the window
+        try
+        {
+            Hide();
+            System.Threading.Thread.Sleep(200); // Small delay to hide the window
 
-        var screenshot = _screenshotService.CaptureFullScreen();
-        OpenEditor(screenshot);
+            var screenshot = _screenshotService.CaptureFullScreen();
+            OpenEditor(screenshot);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error capturing full screen: {ex.Message}");
+            System.Windows.MessageBox.Show($"Failed to capture screenshot: {ex.Message}", "Capture Error", 
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowMainWindow();
+        }
     }
 
     private void CaptureRegion()
     {
-        Hide();
-        System.Threading.Thread.Sleep(200);
+        try
+        {
+            Hide();
+            System.Threading.Thread.Sleep(200);
 
-        var regionSelector = new RegionSelector();
-        if (regionSelector.ShowDialog() == true && regionSelector.SelectedRegion != null)
-        {
-            var screenshot = _screenshotService.CaptureRegion(regionSelector.SelectedRegion.Value);
-            OpenEditor(screenshot);
+            var regionSelector = new RegionSelector();
+            if (regionSelector.ShowDialog() == true && regionSelector.SelectedRegion != null)
+            {
+                var screenshot = _screenshotService.CaptureRegion(regionSelector.SelectedRegion.Value);
+                OpenEditor(screenshot);
+            }
+            else
+            {
+                ShowMainWindow();
+            }
         }
-        else
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"Error capturing region: {ex.Message}");
+            System.Windows.MessageBox.Show($"Failed to capture region: {ex.Message}", "Capture Error", 
+                MessageBoxButton.OK, MessageBoxImage.Error);
             ShowMainWindow();
         }
     }
 
     private void CaptureMonitor(int monitorIndex)
     {
-        Hide();
-        // Ensure window is completely hidden before capturing
-        System.Windows.Application.Current.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
-        System.Threading.Thread.Sleep(300);
+        try
+        {
+            Hide();
+            // Ensure window is completely hidden before capturing
+            System.Windows.Application.Current.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+            System.Threading.Thread.Sleep(300);
 
-        var screenshot = _screenshotService.CaptureScreen(monitorIndex);
-        OpenEditor(screenshot);
+            var screenshot = _screenshotService.CaptureScreen(monitorIndex);
+            OpenEditor(screenshot);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error capturing monitor {monitorIndex}: {ex.Message}");
+            System.Windows.MessageBox.Show($"Failed to capture monitor: {ex.Message}", "Capture Error", 
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowMainWindow();
+        }
     }
 
     private void OpenEditor(System.Windows.Media.Imaging.BitmapSource screenshot)
     {
-        var editor = new EditorWindow(screenshot);
-        editor.ShowDialog();
-        ShowMainWindow();
+        try
+        {
+            var editor = new EditorWindow(screenshot);
+            editor.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error opening editor: {ex.Message}");
+            System.Windows.MessageBox.Show($"Failed to open image editor: {ex.Message}", "Editor Error", 
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ShowMainWindow();
+        }
     }
 
     private void ShowSettings()
