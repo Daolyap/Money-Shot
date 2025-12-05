@@ -1,0 +1,126 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    
+    permissions:
+      contents: write  # Required for creating releases and uploading assets
+      actions: read    # Required for workflow
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for proper versioning
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Extract version from project file
+      id: get_version
+      shell: pwsh
+      run: |
+        [xml]$csproj = Get-Content MoneyShot/MoneyShot.csproj
+        $version = $csproj.Project.PropertyGroup.Version
+        $buildNumber = $env:GITHUB_RUN_NUMBER
+        $shortSha = "${{ github.sha }}".Substring(0, 7)
+        $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+        
+        # Create version tag: v1.0.0-build.123.abc1234
+        $tag = "v$version-build.$buildNumber.$shortSha"
+        $releaseName = "Money Shot v$version Build $buildNumber"
+        
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "tag=$tag" >> $env:GITHUB_OUTPUT
+        echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+        echo "timestamp=$timestamp" >> $env:GITHUB_OUTPUT
+
+    - name: Restore dependencies
+      run: dotnet restore MoneyShot/MoneyShot.csproj
+
+    - name: Build
+      run: dotnet build MoneyShot/MoneyShot.csproj --configuration Release --no-restore
+
+    - name: Publish
+      run: dotnet publish MoneyShot/MoneyShot.csproj --configuration Release --output ./publish --no-build --self-contained false
+
+    - name: Create Release ZIP
+      shell: pwsh
+      run: |
+        $zipName = "MoneyShot-v${{ steps.get_version.outputs.version }}-build.${{ github.run_number }}.zip"
+        Compress-Archive -Path ./publish/* -DestinationPath $zipName
+        echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+    - name: Install WiX Toolset
+      run: |
+        dotnet tool install --global wix
+        wix extension add -g WixToolset.UI.wixext
+        wix extension add -g WixToolset.Util.wixext
+
+    - name: Build MSI
+      shell: pwsh
+      run: |
+        $msiName = "MoneyShot-v${{ steps.get_version.outputs.version }}-build.${{ github.run_number }}.msi"
+        wix build -arch x64 -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext `
+          -d PublishDir="${{ github.workspace }}\publish" `
+          -out $msiName `
+          Installer/Product.wxs
+        echo "MSI_NAME=$msiName" >> $env:GITHUB_ENV
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.get_version.outputs.tag }}
+        name: ${{ steps.get_version.outputs.release_name }}
+        body: |
+          ## 💰 Money Shot - Automated Build
+          
+          **Version:** ${{ steps.get_version.outputs.version }}
+          **Build:** ${{ github.run_number }}
+          **Commit:** ${{ github.sha }}
+          **Date:** ${{ steps.get_version.outputs.timestamp }}
+          
+          ### 📦 Downloads
+          
+          - **MSI Installer (Recommended)**: `MoneyShot-v${{ steps.get_version.outputs.version }}-build.${{ github.run_number }}.msi`
+            - Install to Program Files with shortcuts
+            - Easy uninstallation via Windows Settings
+          
+          - **Portable ZIP**: `MoneyShot-v${{ steps.get_version.outputs.version }}-build.${{ github.run_number }}.zip`
+            - No installation required
+            - Extract and run MoneyShot.exe
+          
+          ### ✨ What's Included
+          
+          - Full screen and region capture
+          - Annotation tools (shapes, text, arrows, numbers)
+          - Save to clipboard and/or file
+          - Global hotkeys (Print Screen, Ctrl+Print Screen)
+          - System tray integration
+          - Modern Windows 11 UI
+          
+          ### ⚙️ Requirements
+          
+          - Windows 10 or Windows 11
+          - .NET 8 Runtime (will prompt to install if missing)
+          
+          ### 📝 Changes
+          
+          This is an automated build from the latest commit to the main branch.
+          See [CHANGELOG.md](https://github.com/Daolyap/Money-Shot/blob/main/CHANGELOG.md) for detailed changes.
+        files: |
+          ${{ env.ZIP_NAME }}
+          ${{ env.MSI_NAME }}
+        draft: false
+        prerelease: true
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
