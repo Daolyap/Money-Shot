@@ -52,12 +52,37 @@ public partial class MainWindow : Window
 
     private void SetupSystemTray()
     {
-        _notifyIcon = new NotifyIcon
+        try
         {
-            Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? ""),
-            Visible = true,
-            Text = "Money Shot - Screenshot Tool"
-        };
+            var processModule = System.Diagnostics.Process.GetCurrentProcess().MainModule;
+            var iconPath = processModule?.FileName;
+            
+            System.Drawing.Icon? icon = null;
+            if (iconPath != null)
+            {
+                icon = System.Drawing.Icon.ExtractAssociatedIcon(iconPath);
+            }
+            
+            // Fallback to default icon if extraction fails
+            icon ??= System.Drawing.SystemIcons.Application;
+
+            _notifyIcon = new NotifyIcon
+            {
+                Icon = icon,
+                Visible = true,
+                Text = "Money Shot - Screenshot Tool"
+            };
+        }
+        catch
+        {
+            // If setup fails, use default icon
+            _notifyIcon = new NotifyIcon
+            {
+                Icon = System.Drawing.SystemIcons.Application,
+                Visible = true,
+                Text = "Money Shot - Screenshot Tool"
+            };
+        }
 
         var contextMenu = new ContextMenuStrip();
         contextMenu.Items.Add("Capture Full Screen", null, (s, e) => CaptureFullScreen());

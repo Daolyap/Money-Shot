@@ -240,10 +240,21 @@ public partial class EditorWindow : Window
 
         if (saveDialog.ShowDialog() == true)
         {
-            var format = System.IO.Path.GetExtension(saveDialog.FileName).TrimStart('.').ToUpper();
+            var extension = System.IO.Path.GetExtension(saveDialog.FileName).TrimStart('.');
+            var format = GetFileFormat(extension);
             _saveService.SaveToFile(finalImage, saveDialog.FileName, format);
             MessageBox.Show("Image saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
         }
+    }
+
+    private string GetFileFormat(string extension)
+    {
+        return extension.ToUpper() switch
+        {
+            "JPG" or "JPEG" => "JPG",
+            "BMP" => "BMP",
+            _ => "PNG"
+        };
     }
 
     private void SaveToClipboard_Click(object sender, RoutedEventArgs e)
