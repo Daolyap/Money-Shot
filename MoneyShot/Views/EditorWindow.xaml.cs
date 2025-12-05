@@ -735,28 +735,54 @@ public partial class EditorWindow : Window
         var cropWidth = _cropRectangle.Width;
         var cropHeight = _cropRectangle.Height;
 
-        // Validate crop dimensions
-        if (cropX < 0) cropX = 0;
-        if (cropY < 0) cropY = 0;
-        if (cropX + cropWidth > _originalImage.PixelWidth) cropWidth = _originalImage.PixelWidth - cropX;
-        if (cropY + cropHeight > _originalImage.PixelHeight) cropHeight = _originalImage.PixelHeight - cropY;
+        // Validate and clamp crop dimensions
+        cropX = Math.Max(0, cropX);
+        cropY = Math.Max(0, cropY);
+        cropX = Math.Min(cropX, _originalImage.PixelWidth - 1);
+        cropY = Math.Min(cropY, _originalImage.PixelHeight - 1);
+        
+        cropWidth = Math.Min(cropWidth, _originalImage.PixelWidth - cropX);
+        cropHeight = Math.Min(cropHeight, _originalImage.PixelHeight - cropY);
+        
+        // Ensure positive dimensions
+        var intCropX = (int)Math.Round(cropX);
+        var intCropY = (int)Math.Round(cropY);
+        var intCropWidth = (int)Math.Round(cropWidth);
+        var intCropHeight = (int)Math.Round(cropHeight);
+        
+        if (intCropWidth <= 0 || intCropHeight <= 0)
+        {
+            MessageBox.Show("Invalid crop dimensions.", "Crop Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            DrawingCanvas.Children.Remove(_cropRectangle);
+            _cropRectangle = null;
+            return;
+        }
 
-        // Create cropped bitmap
-        var croppedBitmap = new CroppedBitmap(_originalImage,
-            new Int32Rect((int)cropX, (int)cropY, (int)cropWidth, (int)cropHeight));
+        try
+        {
+            // Create cropped bitmap
+            var croppedBitmap = new CroppedBitmap(_originalImage,
+                new Int32Rect(intCropX, intCropY, intCropWidth, intCropHeight));
 
-        // Update the image
-        _originalImage = croppedBitmap;
-        DisplayImage();
+            // Update the image
+            _originalImage = croppedBitmap;
+            DisplayImage();
 
-        // Clear all annotations including crop rectangle
-        DrawingCanvas.Children.Clear();
-        _undoStack.Clear();
-        _cropRectangle = null;
-        _numberCounter = 1;
+            // Clear all annotations including crop rectangle
+            DrawingCanvas.Children.Clear();
+            _undoStack.Clear();
+            _cropRectangle = null;
+            _numberCounter = 1;
 
-        // Reset to cursor tool
-        _currentTool = AnnotationTool.Cursor;
+            // Reset to cursor tool
+            _currentTool = AnnotationTool.Cursor;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to apply crop: {ex.Message}", "Crop Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            DrawingCanvas.Children.Remove(_cropRectangle);
+            _cropRectangle = null;
+        }
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
