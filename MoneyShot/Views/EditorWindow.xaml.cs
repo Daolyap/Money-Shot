@@ -31,6 +31,9 @@ public partial class EditorWindow : Window
     private const double ZoomIncrement = 0.25;
     private const double MinZoom = 0.25;
     private const double MaxZoom = 4.0;
+    
+    // Cached pen for hit testing to avoid repeated allocations
+    private static readonly Pen HitTestPen = new(Brushes.Black, 10);
 
     public EditorWindow(BitmapSource image)
     {
@@ -449,7 +452,7 @@ public partial class EditorWindow : Window
                 // Adjust point for canvas positioning
                 var adjustedPoint = new Point(point.X - left, point.Y - top);
                 return pathGeometry.FillContains(adjustedPoint) || 
-                       pathGeometry.StrokeContains(new Pen(Brushes.Black, 10), adjustedPoint);
+                       pathGeometry.StrokeContains(HitTestPen, adjustedPoint);
             }
             return false;
         }
@@ -626,7 +629,10 @@ public partial class EditorWindow : Window
     {
         if (sender is Button button && button.Tag is string toolName)
         {
-            _currentTool = Enum.Parse<AnnotationTool>(toolName);
+            if (Enum.TryParse<AnnotationTool>(toolName, out var tool))
+            {
+                _currentTool = tool;
+            }
         }
     }
 
