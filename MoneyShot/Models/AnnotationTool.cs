@@ -11,5 +11,6 @@ public enum AnnotationTool
     Text,
     Blur,
     Number,
-    Freehand
+    Freehand,
+    Crop
 }

@@ -32,6 +32,10 @@ public partial class EditorWindow : Window
     private const double MinZoom = 0.25;
     private const double MaxZoom = 4.0;
     
+    // Crop fields
+    private Rectangle? _cropRectangle;
+    private bool _isCropping;
+    
     // Cached pen for hit testing to avoid repeated allocations
     private static readonly Pen HitTestPen = new(Brushes.Black, 10);
 
@@ -69,6 +73,10 @@ public partial class EditorWindow : Window
         ImageDisplay.Source = _originalImage;
         ImageDisplay.Width = _originalImage.PixelWidth;
         ImageDisplay.Height = _originalImage.PixelHeight;
+        
+        // Update canvas size to match image
+        DrawingCanvas.Width = _originalImage.PixelWidth;
+        DrawingCanvas.Height = _originalImage.PixelHeight;
     }
 
     private void SetupToolbar()
@@ -99,6 +107,30 @@ public partial class EditorWindow : Window
             {
                 ClearSelection();
             }
+            return;
+        }
+
+        // Handle crop mode
+        if (_currentTool == AnnotationTool.Crop)
+        {
+            _isCropping = true;
+            _startPoint = clickPoint;
+            
+            // Remove existing crop rectangle if any
+            if (_cropRectangle != null)
+            {
+                DrawingCanvas.Children.Remove(_cropRectangle);
+            }
+            
+            _cropRectangle = new Rectangle
+            {
+                Stroke = new SolidColorBrush(Colors.Yellow),
+                StrokeThickness = 2,
+                StrokeDashArray = new System.Windows.Media.DoubleCollection(new[] { 4.0, 2.0 }),
+                Fill = new SolidColorBrush(Color.FromArgb(50, 255, 255, 0))
+            };
+            
+            DrawingCanvas.Children.Add(_cropRectangle);
             return;
         }
 
@@ -145,6 +177,21 @@ public partial class EditorWindow : Window
             return;
         }
 
+        // Handle crop mode
+        if (_currentTool == AnnotationTool.Crop && _isCropping && _cropRectangle != null)
+        {
+            var x = Math.Min(_startPoint.X, currentPoint.X);
+            var y = Math.Min(_startPoint.Y, currentPoint.Y);
+            var width = Math.Abs(_startPoint.X - currentPoint.X);
+            var height = Math.Abs(_startPoint.Y - currentPoint.Y);
+
+            Canvas.SetLeft(_cropRectangle, x);
+            Canvas.SetTop(_cropRectangle, y);
+            _cropRectangle.Width = width;
+            _cropRectangle.Height = height;
+            return;
+        }
+
         if (!_isDrawing || _currentShape == null)
             return;
 
@@ -171,6 +218,32 @@ public partial class EditorWindow : Window
         if (_currentTool == AnnotationTool.Cursor)
         {
             _isDragging = false;
+            return;
+        }
+
+        if (_currentTool == AnnotationTool.Crop && _isCropping)
+        {
+            _isCropping = false;
+            if (_cropRectangle != null && _cropRectangle.Width > 10 && _cropRectangle.Height > 10)
+            {
+                // Ask user to confirm crop
+                var result = MessageBox.Show(
+                    "Apply crop to image? This will remove all annotations and crop the image.",
+                    "Confirm Crop",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    ApplyCrop();
+                }
+                else
+                {
+                    // Remove crop rectangle
+                    DrawingCanvas.Children.Remove(_cropRectangle);
+                    _cropRectangle = null;
+                }
+            }
             return;
         }
 
@@ -651,6 +724,39 @@ public partial class EditorWindow : Window
             var element = _undoStack.Pop();
             DrawingCanvas.Children.Remove(element);
         }
+    }
+
+    private void ApplyCrop()
+    {
+        if (_cropRectangle == null) return;
+
+        var cropX = Canvas.GetLeft(_cropRectangle);
+        var cropY = Canvas.GetTop(_cropRectangle);
+        var cropWidth = _cropRectangle.Width;
+        var cropHeight = _cropRectangle.Height;
+
+        // Validate crop dimensions
+        if (cropX < 0) cropX = 0;
+        if (cropY < 0) cropY = 0;
+        if (cropX + cropWidth > _originalImage.PixelWidth) cropWidth = _originalImage.PixelWidth - cropX;
+        if (cropY + cropHeight > _originalImage.PixelHeight) cropHeight = _originalImage.PixelHeight - cropY;
+
+        // Create cropped bitmap
+        var croppedBitmap = new CroppedBitmap(_originalImage,
+            new Int32Rect((int)cropX, (int)cropY, (int)cropWidth, (int)cropHeight));
+
+        // Update the image
+        _originalImage = croppedBitmap;
+        DisplayImage();
+
+        // Clear all annotations including crop rectangle
+        DrawingCanvas.Children.Clear();
+        _undoStack.Clear();
+        _cropRectangle = null;
+        _numberCounter = 1;
+
+        // Reset to cursor tool
+        _currentTool = AnnotationTool.Cursor;
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)

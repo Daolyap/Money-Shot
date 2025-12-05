@@ -15,6 +15,7 @@
                 <!-- Tool Selection -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
                     <Button Content="↖️ Cursor" Tag="Cursor" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
+                    <Button Content="✂️ Crop" Tag="Crop" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="✏️ Rectangle" Tag="Rectangle" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="⭕ Circle" Tag="Circle" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>
                     <Button Content="➡️ Arrow" Tag="Arrow" Click="ToolButton_Click" Margin="5,0" Padding="10,5" Background="#3E3E42" Foreground="White" BorderBrush="#555"/>

@@ -206,7 +206,9 @@ public partial class MainWindow : Window
     private void CaptureMonitor(int monitorIndex)
     {
         Hide();
-        System.Threading.Thread.Sleep(200);
+        // Ensure window is completely hidden before capturing
+        System.Windows.Application.Current.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+        System.Threading.Thread.Sleep(300);
 
         var screenshot = _screenshotService.CaptureScreen(monitorIndex);
         OpenEditor(screenshot);
