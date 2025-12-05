@@ -787,21 +787,28 @@ public partial class EditorWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        var finalImage = CaptureCanvasAsImage();
-        
-        var saveDialog = new Microsoft.Win32.SaveFileDialog
+        try
         {
-            Filter = "PNG Image|*.png|JPEG Image|*.jpg|Bitmap Image|*.bmp",
-            DefaultExt = ".png",
-            FileName = _saveService.GenerateFileName("PNG")
-        };
+            var finalImage = CaptureCanvasAsImage();
+            
+            var saveDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "PNG Image|*.png|JPEG Image|*.jpg|Bitmap Image|*.bmp",
+                DefaultExt = ".png",
+                FileName = _saveService.GenerateFileName("PNG")
+            };
 
-        if (saveDialog.ShowDialog() == true)
+            if (saveDialog.ShowDialog() == true)
+            {
+                var extension = System.IO.Path.GetExtension(saveDialog.FileName).TrimStart('.');
+                var format = GetFileFormat(extension);
+                _saveService.SaveToFile(finalImage, saveDialog.FileName, format);
+                MessageBox.Show("Image saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
         {
-            var extension = System.IO.Path.GetExtension(saveDialog.FileName).TrimStart('.');
-            var format = GetFileFormat(extension);
-            _saveService.SaveToFile(finalImage, saveDialog.FileName, format);
-            MessageBox.Show("Image saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"Failed to save image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -817,9 +824,16 @@ public partial class EditorWindow : Window
 
     private void SaveToClipboard_Click(object sender, RoutedEventArgs e)
     {
-        var finalImage = CaptureCanvasAsImage();
-        _saveService.SaveToClipboard(finalImage);
-        MessageBox.Show("Image copied to clipboard!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+        try
+        {
+            var finalImage = CaptureCanvasAsImage();
+            _saveService.SaveToClipboard(finalImage);
+            MessageBox.Show("Image copied to clipboard!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to copy image to clipboard: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void ZoomIn_Click(object sender, RoutedEventArgs e)
