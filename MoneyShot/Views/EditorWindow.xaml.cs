@@ -32,6 +32,29 @@ public partial class EditorWindow : Window
     private const double MinZoom = 0.25;
     private const double MaxZoom = 4.0;
     
+    // Resize fields
+    private bool _isResizing;
+    private ElementResizeMode _resizeMode = ElementResizeMode.None;
+    private Point _resizeStartPoint;
+    private double _originalWidth;
+    private double _originalHeight;
+    private double _originalLeft;
+    private double _originalTop;
+    private List<Rectangle> _resizeHandles = new();
+    
+    private enum ElementResizeMode
+    {
+        None,
+        TopLeft,
+        TopRight,
+        BottomLeft,
+        BottomRight,
+        Top,
+        Bottom,
+        Left,
+        Right
+    }
+    
     // Crop fields
     private Rectangle? _cropRectangle;
     private bool _isCropping;
@@ -53,9 +76,89 @@ public partial class EditorWindow : Window
     
     private void EditorWindow_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Delete && _selectedElement != null)
+        // Handle tool selection shortcuts
+        if (!e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control) && 
+            !e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Alt))
         {
-            DeleteSelectedElement();
+            switch (e.Key)
+            {
+                case Key.R:
+                    _currentTool = AnnotationTool.Rectangle;
+                    e.Handled = true;
+                    break;
+                case Key.C when !e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control):
+                    _currentTool = AnnotationTool.Circle;
+                    e.Handled = true;
+                    break;
+                case Key.A when !e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control):
+                    _currentTool = AnnotationTool.Arrow;
+                    e.Handled = true;
+                    break;
+                case Key.L:
+                    _currentTool = AnnotationTool.Line;
+                    e.Handled = true;
+                    break;
+                case Key.T:
+                    _currentTool = AnnotationTool.Text;
+                    e.Handled = true;
+                    break;
+                case Key.P:
+                    _currentTool = AnnotationTool.Blur;
+                    e.Handled = true;
+                    break;
+                case Key.D1:
+                case Key.NumPad1:
+                    _currentTool = AnnotationTool.Number;
+                    e.Handled = true;
+                    break;
+                case Key.Escape:
+                    _currentTool = AnnotationTool.Cursor;
+                    ClearSelection();
+                    e.Handled = true;
+                    break;
+                case Key.Delete:
+                    if (_selectedElement != null)
+                    {
+                        DeleteSelectedElement();
+                        e.Handled = true;
+                    }
+                    break;
+            }
+        }
+        
+        // Handle Ctrl shortcuts
+        if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            switch (e.Key)
+            {
+                case Key.Z:
+                    Undo_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    break;
+                case Key.C:
+                    SaveToClipboard_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    break;
+                case Key.S:
+                    Save_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    break;
+                case Key.OemPlus:
+                case Key.Add:
+                    ZoomIn_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    break;
+                case Key.OemMinus:
+                case Key.Subtract:
+                    ZoomOut_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    break;
+                case Key.D0:
+                case Key.NumPad0:
+                    ZoomReset_Click(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    break;
+            }
         }
     }
     
@@ -94,6 +197,27 @@ public partial class EditorWindow : Window
         // Handle cursor mode for selection and moving
         if (_currentTool == AnnotationTool.Cursor)
         {
+            // Check if clicking on a resize handle first
+            var resizeHandle = FindResizeHandleAtPoint(clickPoint);
+            if (resizeHandle != ElementResizeMode.None && _selectedElement != null)
+            {
+                _isResizing = true;
+                _resizeMode = resizeHandle;
+                _resizeStartPoint = clickPoint;
+                
+                // Store original dimensions
+                if (_selectedElement is Shape shape && !(_selectedElement is Line))
+                {
+                    _originalWidth = shape.Width;
+                    _originalHeight = shape.Height;
+                    _originalLeft = Canvas.GetLeft(shape);
+                    _originalTop = Canvas.GetTop(shape);
+                    if (double.IsNaN(_originalLeft)) _originalLeft = 0;
+                    if (double.IsNaN(_originalTop)) _originalTop = 0;
+                }
+                return;
+            }
+            
             // Try to find an element at the click position
             var hitElement = FindElementAtPoint(clickPoint);
             
@@ -166,6 +290,13 @@ public partial class EditorWindow : Window
     {
         var currentPoint = e.GetPosition(DrawingCanvas);
 
+        // Handle resizing
+        if (_currentTool == AnnotationTool.Cursor && _isResizing && _selectedElement != null)
+        {
+            ResizeElement(_selectedElement, currentPoint);
+            return;
+        }
+
         // Handle cursor mode for dragging elements
         if (_currentTool == AnnotationTool.Cursor && _isDragging && _selectedElement != null)
         {
@@ -218,6 +349,8 @@ public partial class EditorWindow : Window
         if (_currentTool == AnnotationTool.Cursor)
         {
             _isDragging = false;
+            _isResizing = false;
+            _resizeMode = ElementResizeMode.None;
             return;
         }
 
@@ -395,20 +528,53 @@ public partial class EditorWindow : Window
 
     private Rectangle CreateBlurRectangle()
     {
-        // Create an effective blur/pixelate effect that obscures content
+        // Create a pixelate effect using a tiled pattern
+        // This is irreversible as we're creating solid colored blocks
         var rect = new Rectangle
         {
             Stroke = new SolidColorBrush(Colors.Transparent),
             StrokeThickness = 0,
-            // Use a solid opaque fill with strong blur for effective obscuring
-            Fill = new SolidColorBrush(Color.FromArgb(255, 150, 150, 150)),
-            Effect = new System.Windows.Media.Effects.BlurEffect 
-            { 
-                Radius = 60, 
-                KernelType = System.Windows.Media.Effects.KernelType.Box 
-            }
+            // Use a visual brush with a drawing to create pixelated effect
+            Fill = CreatePixelatedBrush()
         };
         return rect;
+    }
+    
+    private Brush CreatePixelatedBrush()
+    {
+        // Create a solid gray brush as pixelation - we'll apply actual pixelation on render
+        // For a true pixelate effect that can't be reversed, we use a mosaic pattern
+        var pixelSize = 10;
+        var drawing = new GeometryDrawing();
+        var drawingGroup = new DrawingGroup();
+        
+        // Create a checkerboard pattern to simulate pixelation
+        for (int i = 0; i < 10; i++)
+        {
+            for (int j = 0; j < 10; j++)
+            {
+                // Create random gray shades to simulate pixelation
+                var grayValue = (byte)(100 + (i + j) % 50);
+                var rect = new RectangleGeometry(new Rect(i * pixelSize, j * pixelSize, pixelSize, pixelSize));
+                var geoDrawing = new GeometryDrawing
+                {
+                    Brush = new SolidColorBrush(Color.FromRgb(grayValue, grayValue, grayValue)),
+                    Geometry = rect
+                };
+                drawingGroup.Children.Add(geoDrawing);
+            }
+        }
+        
+        var brush = new DrawingBrush
+        {
+            Drawing = drawingGroup,
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, pixelSize * 10, pixelSize * 10),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.None
+        };
+        
+        return brush;
     }
 
     private void UpdateRectangle(Point currentPoint)
@@ -495,8 +661,8 @@ public partial class EditorWindow : Window
         {
             var element = DrawingCanvas.Children[i];
             
-            // Skip the selection border itself
-            if (element == _selectionBorder)
+            // Skip the selection border and resize handles
+            if (element == _selectionBorder || _resizeHandles.Contains(element))
                 continue;
             
             // Check if point is within element bounds
@@ -628,6 +794,151 @@ public partial class EditorWindow : Window
         _selectionBorder.Height = height + 4;
         
         DrawingCanvas.Children.Add(_selectionBorder);
+        
+        // Add resize handles for resizable elements
+        if (element is Shape shape2 && !(element is Line) || element is TextBlock)
+        {
+            CreateResizeHandles(left, top, width, height);
+        }
+    }
+    
+    private void CreateResizeHandles(double left, double top, double width, double height)
+    {
+        // Clear existing handles
+        foreach (var handle in _resizeHandles)
+        {
+            DrawingCanvas.Children.Remove(handle);
+        }
+        _resizeHandles.Clear();
+        
+        var handleSize = 8.0;
+        var handleColor = new SolidColorBrush(Colors.Blue);
+        
+        // Corner handles
+        _resizeHandles.Add(CreateResizeHandle(left - 2 - handleSize/2, top - 2 - handleSize/2, handleSize, handleColor)); // Top-left
+        _resizeHandles.Add(CreateResizeHandle(left + width + 2 - handleSize/2, top - 2 - handleSize/2, handleSize, handleColor)); // Top-right
+        _resizeHandles.Add(CreateResizeHandle(left - 2 - handleSize/2, top + height + 2 - handleSize/2, handleSize, handleColor)); // Bottom-left
+        _resizeHandles.Add(CreateResizeHandle(left + width + 2 - handleSize/2, top + height + 2 - handleSize/2, handleSize, handleColor)); // Bottom-right
+        
+        // Edge handles
+        _resizeHandles.Add(CreateResizeHandle(left + width/2 - handleSize/2, top - 2 - handleSize/2, handleSize, handleColor)); // Top
+        _resizeHandles.Add(CreateResizeHandle(left + width/2 - handleSize/2, top + height + 2 - handleSize/2, handleSize, handleColor)); // Bottom
+        _resizeHandles.Add(CreateResizeHandle(left - 2 - handleSize/2, top + height/2 - handleSize/2, handleSize, handleColor)); // Left
+        _resizeHandles.Add(CreateResizeHandle(left + width + 2 - handleSize/2, top + height/2 - handleSize/2, handleSize, handleColor)); // Right
+    }
+    
+    private Rectangle CreateResizeHandle(double x, double y, double size, SolidColorBrush color)
+    {
+        var handle = new Rectangle
+        {
+            Width = size,
+            Height = size,
+            Fill = color,
+            Stroke = new SolidColorBrush(Colors.White),
+            StrokeThickness = 1,
+            Cursor = Cursors.SizeAll
+        };
+        Canvas.SetLeft(handle, x);
+        Canvas.SetTop(handle, y);
+        DrawingCanvas.Children.Add(handle);
+        return handle;
+    }
+    
+    private ElementResizeMode FindResizeHandleAtPoint(Point point)
+    {
+        if (_resizeHandles.Count != 8) return ElementResizeMode.None;
+        
+        var tolerance = 5.0;
+        
+        for (int i = 0; i < _resizeHandles.Count; i++)
+        {
+            var handle = _resizeHandles[i];
+            var left = Canvas.GetLeft(handle);
+            var top = Canvas.GetTop(handle);
+            
+            if (point.X >= left - tolerance && point.X <= left + handle.Width + tolerance &&
+                point.Y >= top - tolerance && point.Y <= top + handle.Height + tolerance)
+            {
+                return i switch
+                {
+                    0 => ElementResizeMode.TopLeft,
+                    1 => ElementResizeMode.TopRight,
+                    2 => ElementResizeMode.BottomLeft,
+                    3 => ElementResizeMode.BottomRight,
+                    4 => ElementResizeMode.Top,
+                    5 => ElementResizeMode.Bottom,
+                    6 => ElementResizeMode.Left,
+                    7 => ElementResizeMode.Right,
+                    _ => ElementResizeMode.None
+                };
+            }
+        }
+        
+        return ElementResizeMode.None;
+    }
+    
+    private void ResizeElement(UIElement element, Point currentPoint)
+    {
+        if (!(element is Shape shape) || element is Line)
+            return;
+        
+        var deltaX = currentPoint.X - _resizeStartPoint.X;
+        var deltaY = currentPoint.Y - _resizeStartPoint.Y;
+        
+        switch (_resizeMode)
+        {
+            case ElementResizeMode.BottomRight:
+                shape.Width = Math.Max(10, _originalWidth + deltaX);
+                shape.Height = Math.Max(10, _originalHeight + deltaY);
+                break;
+            case ElementResizeMode.BottomLeft:
+                shape.Width = Math.Max(10, _originalWidth - deltaX);
+                shape.Height = Math.Max(10, _originalHeight + deltaY);
+                Canvas.SetLeft(shape, _originalLeft + deltaX);
+                break;
+            case ElementResizeMode.TopRight:
+                shape.Width = Math.Max(10, _originalWidth + deltaX);
+                shape.Height = Math.Max(10, _originalHeight - deltaY);
+                Canvas.SetTop(shape, _originalTop + deltaY);
+                break;
+            case ElementResizeMode.TopLeft:
+                shape.Width = Math.Max(10, _originalWidth - deltaX);
+                shape.Height = Math.Max(10, _originalHeight - deltaY);
+                Canvas.SetLeft(shape, _originalLeft + deltaX);
+                Canvas.SetTop(shape, _originalTop + deltaY);
+                break;
+            case ElementResizeMode.Right:
+                shape.Width = Math.Max(10, _originalWidth + deltaX);
+                break;
+            case ElementResizeMode.Left:
+                shape.Width = Math.Max(10, _originalWidth - deltaX);
+                Canvas.SetLeft(shape, _originalLeft + deltaX);
+                break;
+            case ElementResizeMode.Bottom:
+                shape.Height = Math.Max(10, _originalHeight + deltaY);
+                break;
+            case ElementResizeMode.Top:
+                shape.Height = Math.Max(10, _originalHeight - deltaY);
+                Canvas.SetTop(shape, _originalTop + deltaY);
+                break;
+        }
+        
+        // Update selection border and handles
+        var left = Canvas.GetLeft(shape);
+        var top = Canvas.GetTop(shape);
+        if (double.IsNaN(left)) left = 0;
+        if (double.IsNaN(top)) top = 0;
+        
+        if (_selectionBorder != null)
+        {
+            Canvas.SetLeft(_selectionBorder, left - 2);
+            Canvas.SetTop(_selectionBorder, top - 2);
+            _selectionBorder.Width = shape.Width + 4;
+            _selectionBorder.Height = shape.Height + 4;
+        }
+        
+        // Update resize handles
+        CreateResizeHandles(left, top, shape.Width, shape.Height);
     }
 
     private void ClearSelection()
@@ -637,6 +948,14 @@ public partial class EditorWindow : Window
             DrawingCanvas.Children.Remove(_selectionBorder);
             _selectionBorder = null;
         }
+        
+        // Remove resize handles
+        foreach (var handle in _resizeHandles)
+        {
+            DrawingCanvas.Children.Remove(handle);
+        }
+        _resizeHandles.Clear();
+        
         _selectedElement = null;
     }
 
@@ -714,6 +1033,31 @@ public partial class EditorWindow : Window
         if (sender is Button button && button.Background is SolidColorBrush brush)
         {
             _currentColor = brush.Color;
+            
+            // If an element is selected, change its color
+            if (_selectedElement != null)
+            {
+                ChangeElementColor(_selectedElement, _currentColor);
+            }
+        }
+    }
+    
+    private void ChangeElementColor(UIElement element, Color newColor)
+    {
+        var brush = new SolidColorBrush(newColor);
+        
+        if (element is Shape shape && !(element is Rectangle rect && rect.Fill is DrawingBrush))
+        {
+            // Don't change color of pixelate rectangles (they have DrawingBrush)
+            shape.Stroke = brush;
+            if (element is Path path)
+            {
+                path.Fill = brush; // Arrows use fill for the arrowhead
+            }
+        }
+        else if (element is TextBlock textBlock)
+        {
+            textBlock.Foreground = brush;
         }
     }
 
