@@ -49,6 +49,7 @@ public class HotKeyService
             UnregisterHotKey(_windowHandle, id);
         }
         _hotKeyActions.Clear();
+        _currentId = 0; // Reset ID counter
     }
 
     private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -91,6 +92,11 @@ public class HotKeyService
     /// </summary>
     public static (uint modifiers, uint key) ParseHotKey(string hotkeyString)
     {
+        if (string.IsNullOrWhiteSpace(hotkeyString))
+        {
+            return (0, 0);
+        }
+
         uint modifiers = 0;
         uint key = 0;
 

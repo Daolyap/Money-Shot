@@ -1,6 +1,7 @@
 using System.Windows;
 using MoneyShot.Models;
 using MoneyShot.Services;
+using Application = System.Windows.Application;
 
 namespace MoneyShot.Views;
 
@@ -88,7 +89,13 @@ public partial class SettingsWindow : Window
         _settingsService.SetStartupWithWindows(_settings.RunOnStartup);
         _settingsService.SetWindowsPrintScreenDisabled(_settings.DisableWindowsPrintScreen);
 
-        MessageBox.Show("Settings saved successfully! Please restart the application for hotkey changes to take effect.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+        // Reload hotkeys in the main window
+        if (Application.Current.MainWindow is MainWindow mainWindow)
+        {
+            mainWindow.ReloadHotKeys();
+        }
+
+        MessageBox.Show("Settings saved successfully! Hotkeys have been updated.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
         Close();
     }
 

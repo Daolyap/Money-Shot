@@ -106,6 +106,15 @@ public partial class MainWindow : Window
         });
     }
 
+    public void ReloadHotKeys()
+    {
+        // Unregister all existing hotkeys
+        _hotKeyService.UnregisterAll();
+        
+        // Re-register with new settings
+        RegisterHotKeys();
+    }
+
     private void SetupSystemTray()
     {
         try
