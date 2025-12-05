@@ -3,6 +3,7 @@ namespace MoneyShot.Models;
 public enum AnnotationTool
 {
     None,
+    Cursor,
     Rectangle,
     Circle,
     Arrow,
