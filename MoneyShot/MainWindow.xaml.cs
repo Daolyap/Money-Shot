@@ -92,14 +92,15 @@ public partial class MainWindow : Window
 
     private void RegisterHotKeys()
     {
-        // Print Screen for full screen capture
-        _hotKeyService.RegisterHotKey(0, HotKeyService.VK_SNAPSHOT, () =>
+        var settings = _settingsService.LoadSettings();
+        
+        // Register hotkeys from settings
+        _hotKeyService.RegisterHotKeyFromString(settings.HotKeyCapture, () =>
         {
             Dispatcher.Invoke(CaptureFullScreen);
         });
 
-        // Ctrl + Print Screen for region capture
-        _hotKeyService.RegisterHotKey(HotKeyService.MOD_CONTROL, HotKeyService.VK_SNAPSHOT, () =>
+        _hotKeyService.RegisterHotKeyFromString(settings.HotKeyRegionCapture, () =>
         {
             Dispatcher.Invoke(CaptureRegion);
         });

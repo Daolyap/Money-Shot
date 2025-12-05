@@ -30,6 +30,22 @@ public partial class SettingsWindow : Window
         SaveToBothRadio.IsChecked = _settings.DefaultSaveDestination == SaveDestination.Both;
 
         FormatComboBox.SelectedItem = _settings.DefaultFileFormat;
+        
+        // Load hotkey settings
+        SelectComboBoxItem(HotKeyCaptureComboBox, _settings.HotKeyCapture);
+        SelectComboBoxItem(HotKeyRegionCaptureComboBox, _settings.HotKeyRegionCapture);
+    }
+
+    private void SelectComboBoxItem(System.Windows.Controls.ComboBox comboBox, string value)
+    {
+        foreach (System.Windows.Controls.ComboBoxItem item in comboBox.Items)
+        {
+            if (item.Content.ToString() == value)
+            {
+                item.IsSelected = true;
+                return;
+            }
+        }
     }
 
     private void BrowsePath_Click(object sender, RoutedEventArgs e)
@@ -61,11 +77,18 @@ public partial class SettingsWindow : Window
         if (FormatComboBox.SelectedItem is string format)
             _settings.DefaultFileFormat = format;
 
+        // Save hotkey settings
+        if (HotKeyCaptureComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem captureItem)
+            _settings.HotKeyCapture = captureItem.Content.ToString() ?? "PrintScreen";
+        
+        if (HotKeyRegionCaptureComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem regionItem)
+            _settings.HotKeyRegionCapture = regionItem.Content.ToString() ?? "Ctrl+PrintScreen";
+
         _settingsService.SaveSettings(_settings);
         _settingsService.SetStartupWithWindows(_settings.RunOnStartup);
         _settingsService.SetWindowsPrintScreenDisabled(_settings.DisableWindowsPrintScreen);
 
-        MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageBox.Show("Settings saved successfully! Please restart the application for hotkey changes to take effect.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
         Close();
     }
 

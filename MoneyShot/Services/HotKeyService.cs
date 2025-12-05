@@ -70,10 +70,110 @@ public class HotKeyService
     public const uint VK_F1 = 0x70;
     public const uint VK_F2 = 0x71;
     public const uint VK_F3 = 0x72;
+    public const uint VK_F4 = 0x73;
+    public const uint VK_F5 = 0x74;
+    public const uint VK_F6 = 0x75;
+    public const uint VK_F7 = 0x76;
+    public const uint VK_F8 = 0x77;
+    public const uint VK_F9 = 0x78;
+    public const uint VK_F10 = 0x79;
+    public const uint VK_F11 = 0x7A;
+    public const uint VK_F12 = 0x7B;
 
     // Modifiers
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;
     public const uint MOD_SHIFT = 0x0004;
     public const uint MOD_WIN = 0x0008;
+
+    /// <summary>
+    /// Parse a hotkey string like "Ctrl+PrintScreen" or "Alt+F1" into modifiers and key code
+    /// </summary>
+    public static (uint modifiers, uint key) ParseHotKey(string hotkeyString)
+    {
+        uint modifiers = 0;
+        uint key = 0;
+
+        var parts = hotkeyString.Split('+');
+        foreach (var part in parts)
+        {
+            var trimmed = part.Trim();
+            switch (trimmed.ToLower())
+            {
+                case "ctrl":
+                case "control":
+                    modifiers |= MOD_CONTROL;
+                    break;
+                case "alt":
+                    modifiers |= MOD_ALT;
+                    break;
+                case "shift":
+                    modifiers |= MOD_SHIFT;
+                    break;
+                case "win":
+                case "windows":
+                    modifiers |= MOD_WIN;
+                    break;
+                case "printscreen":
+                case "prtsc":
+                    key = VK_SNAPSHOT;
+                    break;
+                case "f1":
+                    key = VK_F1;
+                    break;
+                case "f2":
+                    key = VK_F2;
+                    break;
+                case "f3":
+                    key = VK_F3;
+                    break;
+                case "f4":
+                    key = VK_F4;
+                    break;
+                case "f5":
+                    key = VK_F5;
+                    break;
+                case "f6":
+                    key = VK_F6;
+                    break;
+                case "f7":
+                    key = VK_F7;
+                    break;
+                case "f8":
+                    key = VK_F8;
+                    break;
+                case "f9":
+                    key = VK_F9;
+                    break;
+                case "f10":
+                    key = VK_F10;
+                    break;
+                case "f11":
+                    key = VK_F11;
+                    break;
+                case "f12":
+                    key = VK_F12;
+                    break;
+            }
+        }
+
+        return (modifiers, key);
+    }
+
+    /// <summary>
+    /// Register a hotkey from a string like "Ctrl+PrintScreen"
+    /// </summary>
+    public int RegisterHotKeyFromString(string hotkeyString, Action action)
+    {
+        try
+        {
+            var (modifiers, key) = ParseHotKey(hotkeyString);
+            if (key == 0) return -1; // Invalid key
+            return RegisterHotKey(modifiers, key, action);
+        }
+        catch
+        {
+            return -1;
+        }
+    }
 }
