@@ -34,6 +34,8 @@
         </Component>
         
         <!-- Include all published files -->
+        <!-- Note: Files are explicitly listed for clarity and control.
+             For larger applications, consider using WiX heat tool to auto-harvest files. -->
         <Component Id="PublishedFiles" Bitness="always64">
           <File Id="MoneyShotDll" Source="$(var.PublishDir)\MoneyShot.dll" />
           <File Id="MoneyShotRuntimeConfig" Source="$(var.PublishDir)\MoneyShot.runtimeconfig.json" />

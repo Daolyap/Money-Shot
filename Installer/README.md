@@ -17,7 +17,7 @@ To build the MSI installer locally on Windows:
 1. Install .NET 8 SDK
 2. Install WiX Toolset v5:
    ```powershell
-   dotnet tool install --global wix --version 5.0.2
+   dotnet tool install --global wix
    wix extension add -g WixToolset.UI.wixext
    wix extension add -g WixToolset.Util.wixext
    ```
