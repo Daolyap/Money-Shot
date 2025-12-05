@@ -796,7 +796,7 @@ public partial class EditorWindow : Window
         DrawingCanvas.Children.Add(_selectionBorder);
         
         // Add resize handles for resizable elements
-        if (element is Shape shape2 && !(element is Line) || element is TextBlock)
+        if ((element is Shape shape2 && !(element is Line)) || element is TextBlock)
         {
             CreateResizeHandles(left, top, width, height);
         }
@@ -1044,11 +1044,13 @@ public partial class EditorWindow : Window
     
     private void ChangeElementColor(UIElement element, Color newColor)
     {
+        if (!IsColorChangeableElement(element))
+            return;
+            
         var brush = new SolidColorBrush(newColor);
         
-        if (element is Shape shape && !(element is Rectangle rect && rect.Fill is DrawingBrush))
+        if (element is Shape shape)
         {
-            // Don't change color of pixelate rectangles (they have DrawingBrush)
             shape.Stroke = brush;
             if (element is Path path)
             {
@@ -1059,6 +1061,15 @@ public partial class EditorWindow : Window
         {
             textBlock.Foreground = brush;
         }
+    }
+    
+    private bool IsColorChangeableElement(UIElement element)
+    {
+        // Pixelate rectangles have DrawingBrush and should not be color-changed
+        if (element is Rectangle rect && rect.Fill is DrawingBrush)
+            return false;
+            
+        return element is Shape || element is TextBlock;
     }
 
     private void Undo_Click(object sender, RoutedEventArgs e)

@@ -125,8 +125,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] Modern UI
 - [x] GitHub Actions build workflow
 - [x] MSI Installer package
-- [ ] Blur/pixelate tool
-- [ ] Advanced text tool with font selection
+- [x] Advanced text tool with font selection
+- [x] Blur/pixelate tool
 - [ ] Freehand drawing
 - [ ] Image effects (drop shadow, borders)
 - [ ] Screenshot history
