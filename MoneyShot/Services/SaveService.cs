@@ -100,10 +100,32 @@ public class SaveService
             // Get the full path and ensure it's valid
             var fullPath = Path.GetFullPath(filePath);
             
-            // Check for path traversal attempts
-            if (fullPath.Contains(".."))
+            // Ensure the path is rooted (absolute)
+            if (!Path.IsPathRooted(fullPath))
             {
-                throw new ArgumentException("Path traversal detected in file path.", nameof(filePath));
+                throw new ArgumentException("Path must be absolute.", nameof(filePath));
+            }
+            
+            // Get the directory path for additional validation
+            var directory = Path.GetDirectoryName(fullPath);
+            
+            // Ensure we're not trying to write to a system directory
+            var systemDirs = new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+            };
+            
+            foreach (var sysDir in systemDirs)
+            {
+                if (!string.IsNullOrEmpty(sysDir) && 
+                    !string.IsNullOrEmpty(directory) && 
+                    directory.StartsWith(sysDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new ArgumentException("Cannot save to system directories.", nameof(filePath));
+                }
             }
             
             // Ensure the path is not a root directory
@@ -112,7 +134,20 @@ public class SaveService
                 throw new ArgumentException("Cannot save to a directory. Please specify a file name.", nameof(filePath));
             }
         }
-        catch (Exception ex) when (ex is not ArgumentException)
+        catch (ArgumentException)
+        {
+            // Re-throw ArgumentException as-is (our validation errors)
+            throw;
+        }
+        catch (NotSupportedException ex)
+        {
+            throw new ArgumentException("Path format not supported.", nameof(filePath), ex);
+        }
+        catch (PathTooLongException ex)
+        {
+            throw new ArgumentException("Path is too long.", nameof(filePath), ex);
+        }
+        catch (Exception ex)
         {
             throw new ArgumentException("Invalid file path.", nameof(filePath), ex);
         }

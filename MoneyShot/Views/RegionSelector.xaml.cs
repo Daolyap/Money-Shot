@@ -45,7 +45,7 @@ public partial class RegionSelector : Window
         // Set window to cover all screens
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        AllowsTransparency = true;
+        AllowsTransparency = true; // Required for transparent overlay with WindowStyle.None
         Topmost = true;
         
         // Position and size to cover entire virtual screen

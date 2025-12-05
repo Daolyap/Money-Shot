@@ -108,10 +108,9 @@ public class SettingsService
                 // Get the full path and ensure it's a valid, absolute path
                 var fullPath = Path.GetFullPath(settings.DefaultSavePath);
                 
-                // Ensure the path doesn't contain any suspicious patterns
-                if (fullPath.Contains("..") || fullPath.Contains("~"))
+                // Ensure the path is rooted (absolute) and doesn't use relative components
+                if (!Path.IsPathRooted(fullPath))
                 {
-                    // Reset to default if path looks suspicious
                     settings.DefaultSavePath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
                 }
                 else
@@ -119,9 +118,19 @@ public class SettingsService
                     settings.DefaultSavePath = fullPath;
                 }
             }
-            catch
+            catch (ArgumentException)
             {
-                // If path is invalid, reset to default
+                // Path contains invalid characters
+                settings.DefaultSavePath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            }
+            catch (NotSupportedException)
+            {
+                // Path format not supported
+                settings.DefaultSavePath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            }
+            catch (PathTooLongException)
+            {
+                // Path exceeds maximum length
                 settings.DefaultSavePath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
             }
         }
