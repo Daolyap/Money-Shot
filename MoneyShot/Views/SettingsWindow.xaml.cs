@@ -19,8 +19,10 @@ public partial class SettingsWindow : Window
 
     private void LoadSettings()
     {
+        StartInTrayCheckbox.IsChecked = _settings.StartInTray;
         RunOnStartupCheckbox.IsChecked = _settings.RunOnStartup;
         MinimizeToTrayCheckbox.IsChecked = _settings.MinimizeToTray;
+        DisableWindowsPrintScreenCheckbox.IsChecked = _settings.DisableWindowsPrintScreen;
         SavePathTextBox.Text = _settings.DefaultSavePath;
         
         SaveToClipboardRadio.IsChecked = _settings.DefaultSaveDestination == SaveDestination.Clipboard;
@@ -43,8 +45,10 @@ public partial class SettingsWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        _settings.StartInTray = StartInTrayCheckbox.IsChecked ?? true;
         _settings.RunOnStartup = RunOnStartupCheckbox.IsChecked ?? false;
         _settings.MinimizeToTray = MinimizeToTrayCheckbox.IsChecked ?? false;
+        _settings.DisableWindowsPrintScreen = DisableWindowsPrintScreenCheckbox.IsChecked ?? false;
         _settings.DefaultSavePath = SavePathTextBox.Text;
 
         if (SaveToClipboardRadio.IsChecked == true)
@@ -59,6 +63,7 @@ public partial class SettingsWindow : Window
 
         _settingsService.SaveSettings(_settings);
         _settingsService.SetStartupWithWindows(_settings.RunOnStartup);
+        _settingsService.SetWindowsPrintScreenDisabled(_settings.DisableWindowsPrintScreen);
 
         MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
         Close();

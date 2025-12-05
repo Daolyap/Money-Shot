@@ -1,5 +1,8 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Forms;
+using System.Windows.Input;
+using System.Windows.Media;
 using MoneyShot.Services;
 using MoneyShot.Views;
 using Application = System.Windows.Application;
@@ -33,6 +36,58 @@ public partial class MainWindow : Window
     {
         _hotKeyService.Initialize(this);
         RegisterHotKeys();
+        PopulateMonitorButtons();
+        
+        // Check if app should start in tray
+        var settings = _settingsService.LoadSettings();
+        if (settings.StartInTray)
+        {
+            Hide();
+        }
+    }
+
+    private void PopulateMonitorButtons()
+    {
+        var screens = _screenshotService.GetAllScreens();
+        if (screens.Count > 1)
+        {
+            var separator = new Separator
+            {
+                Margin = new Thickness(0, 10, 0, 5),
+                Background = new SolidColorBrush(Color.FromRgb(85, 85, 85))
+            };
+            MonitorButtonsPanel.Children.Add(separator);
+
+            var label = new TextBlock
+            {
+                Text = "Individual Monitors:",
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Colors.White),
+                Margin = new Thickness(0, 5, 0, 5),
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+            };
+            MonitorButtonsPanel.Children.Add(label);
+
+            for (int i = 0; i < screens.Count; i++)
+            {
+                var screenIndex = i;
+                var screen = screens[i];
+                var isPrimary = screen.Primary ? " (Primary)" : "";
+                var button = new System.Windows.Controls.Button
+                {
+                    Content = $"🖥️ Monitor {i + 1}{isPrimary}",
+                    Padding = new Thickness(20, 10, 20, 10),
+                    Margin = new Thickness(0, 3, 0, 3),
+                    FontSize = 14,
+                    Background = new SolidColorBrush(Color.FromRgb(62, 62, 66)),
+                    Foreground = new SolidColorBrush(Colors.White),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85)),
+                    Cursor = System.Windows.Input.Cursors.Hand
+                };
+                button.Click += (s, ev) => CaptureMonitor(screenIndex);
+                MonitorButtonsPanel.Children.Add(button);
+            }
+        }
     }
 
     private void RegisterHotKeys()
@@ -87,6 +142,21 @@ public partial class MainWindow : Window
         var contextMenu = new ContextMenuStrip();
         contextMenu.Items.Add("Capture Full Screen", null, (s, e) => CaptureFullScreen());
         contextMenu.Items.Add("Capture Region", null, (s, e) => CaptureRegion());
+        
+        // Add individual monitor options
+        var screens = _screenshotService.GetAllScreens();
+        if (screens.Count > 1)
+        {
+            contextMenu.Items.Add("-");
+            for (int i = 0; i < screens.Count; i++)
+            {
+                var screenIndex = i;
+                var screen = screens[i];
+                var isPrimary = screen.Primary ? " (Primary)" : "";
+                contextMenu.Items.Add($"Capture Monitor {i + 1}{isPrimary}", null, (s, e) => CaptureMonitor(screenIndex));
+            }
+        }
+        
         contextMenu.Items.Add("-");
         contextMenu.Items.Add("Settings", null, (s, e) => ShowSettings());
         contextMenu.Items.Add("-");
@@ -121,6 +191,15 @@ public partial class MainWindow : Window
         {
             ShowMainWindow();
         }
+    }
+
+    private void CaptureMonitor(int monitorIndex)
+    {
+        Hide();
+        System.Threading.Thread.Sleep(200);
+
+        var screenshot = _screenshotService.CaptureScreen(monitorIndex);
+        OpenEditor(screenshot);
     }
 
     private void OpenEditor(System.Windows.Media.Imaging.BitmapSource screenshot)

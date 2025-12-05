@@ -43,6 +43,9 @@
                             <ToolTip Content="Select a region to capture (Hotkey: Ctrl+Print Screen)"/>
                         </Button.ToolTip>
                     </Button>
+                    
+                    <!-- Individual Monitor Captures (populated dynamically) -->
+                    <StackPanel Name="MonitorButtonsPanel" Margin="0,10,0,0"/>
                 </StackPanel>
             </Border>
 

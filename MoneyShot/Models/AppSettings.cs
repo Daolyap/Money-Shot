@@ -10,6 +10,8 @@ public class AppSettings
     public string DefaultFileFormat { get; set; } = "PNG";
     public bool RunOnStartup { get; set; } = false;
     public bool MinimizeToTray { get; set; } = true;
+    public bool StartInTray { get; set; } = true;
+    public bool DisableWindowsPrintScreen { get; set; } = false;
     public Color DefaultAnnotationColor { get; set; } = Colors.Red;
     public int DefaultLineThickness { get; set; } = 3;
     public string HotKeyCapture { get; set; } = "PrintScreen";
