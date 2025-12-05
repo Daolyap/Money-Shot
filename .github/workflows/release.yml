@@ -28,20 +28,30 @@ jobs:
       id: get_version
       shell: pwsh
       run: |
-        [xml]$csproj = Get-Content MoneyShot/MoneyShot.csproj
-        $version = $csproj.Project.PropertyGroup.Version
-        $buildNumber = $env:GITHUB_RUN_NUMBER
-        $shortSha = "${{ github.sha }}".Substring(0, 7)
-        $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+        try {
+          [xml]$csproj = Get-Content MoneyShot/MoneyShot.csproj
+          $version = $csproj.Project.PropertyGroup.Version
+          
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Version property not found in MoneyShot.csproj"
+          }
+          
+          $buildNumber = $env:GITHUB_RUN_NUMBER
+          $shortSha = "${{ github.sha }}".Substring(0, 7)
+          $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
-        # Create version tag: v1.0.0-build.123.abc1234
-        $tag = "v$version-build.$buildNumber.$shortSha"
-        $releaseName = "Money Shot v$version Build $buildNumber"
+          # Create version tag: v1.0.0-build.123.abc1234
+          $tag = "v$version-build.$buildNumber.$shortSha"
+          $releaseName = "Money Shot v$version Build $buildNumber"
 
-        echo "version=$version" >> $env:GITHUB_OUTPUT
-        echo "tag=$tag" >> $env:GITHUB_OUTPUT
-        echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
-        echo "timestamp=$timestamp" >> $env:GITHUB_OUTPUT
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+          echo "timestamp=$timestamp" >> $env:GITHUB_OUTPUT
+        } catch {
+          Write-Error "Failed to extract version: $_"
+          exit 1
+        }
 
     - name: Restore dependencies
       run: dotnet restore MoneyShot/MoneyShot.csproj
@@ -121,6 +131,5 @@ jobs:
           ${{ env.MSI_NAME }}
         draft: false
         prerelease: true
-        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
