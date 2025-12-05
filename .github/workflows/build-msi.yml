@@ -12,6 +12,10 @@ on:
 jobs:
   build-msi:
     runs-on: windows-latest
+    
+    permissions:
+      contents: write  # Required for uploading release assets
+      actions: read    # Required for workflow
 
     steps:
     - name: Checkout code
