@@ -72,6 +72,9 @@ public partial class EditorWindow : Window
         
         // Add keyboard event handler for Delete key
         KeyDown += EditorWindow_KeyDown;
+        
+        // Add mouse wheel event handler for Ctrl + scroll zoom
+        MouseWheel += EditorWindow_MouseWheel;
     }
     
     private void EditorWindow_KeyDown(object sender, KeyEventArgs e)
@@ -159,6 +162,33 @@ public partial class EditorWindow : Window
                     e.Handled = true;
                     break;
             }
+        }
+    }
+    
+    private void EditorWindow_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        // Only zoom when Ctrl is pressed
+        if (Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (e.Delta > 0)
+            {
+                // Scroll up = Zoom in
+                if (_zoomLevel < MaxZoom)
+                {
+                    _zoomLevel += ZoomIncrement;
+                    ApplyZoom();
+                }
+            }
+            else
+            {
+                // Scroll down = Zoom out
+                if (_zoomLevel > MinZoom)
+                {
+                    _zoomLevel -= ZoomIncrement;
+                    ApplyZoom();
+                }
+            }
+            e.Handled = true;
         }
     }
     
