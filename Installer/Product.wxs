@@ -101,10 +101,10 @@
         <ComponentRef Id="DesktopShortcut" />
       </Feature>
       
-      <!-- Optional startup feature -->
+      <!-- Optional startup feature (disabled by default) -->
       <Feature Id="StartupFeature" 
                Title="Run on Startup" 
-               Level="1000"
+               Level="0"
                Description="Automatically start Money Shot when Windows starts">
         <ComponentRef Id="StartupRegistry" />
       </Feature>
