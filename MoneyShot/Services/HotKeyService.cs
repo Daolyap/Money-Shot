@@ -68,6 +68,16 @@ public class HotKeyService
 
     // Virtual key codes
     public const uint VK_SNAPSHOT = 0x2C; // Print Screen
+    public const uint VK_0 = 0x30;
+    public const uint VK_1 = 0x31;
+    public const uint VK_2 = 0x32;
+    public const uint VK_3 = 0x33;
+    public const uint VK_4 = 0x34;
+    public const uint VK_5 = 0x35;
+    public const uint VK_6 = 0x36;
+    public const uint VK_7 = 0x37;
+    public const uint VK_8 = 0x38;
+    public const uint VK_9 = 0x39;
     public const uint VK_F1 = 0x70;
     public const uint VK_F2 = 0x71;
     public const uint VK_F3 = 0x72;
@@ -123,6 +133,36 @@ public class HotKeyService
                 case "printscreen":
                 case "prtsc":
                     key = VK_SNAPSHOT;
+                    break;
+                case "0":
+                    key = VK_0;
+                    break;
+                case "1":
+                    key = VK_1;
+                    break;
+                case "2":
+                    key = VK_2;
+                    break;
+                case "3":
+                    key = VK_3;
+                    break;
+                case "4":
+                    key = VK_4;
+                    break;
+                case "5":
+                    key = VK_5;
+                    break;
+                case "6":
+                    key = VK_6;
+                    break;
+                case "7":
+                    key = VK_7;
+                    break;
+                case "8":
+                    key = VK_8;
+                    break;
+                case "9":
+                    key = VK_9;
                     break;
                 case "f1":
                     key = VK_F1;

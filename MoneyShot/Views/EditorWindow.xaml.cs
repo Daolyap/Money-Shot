@@ -32,6 +32,11 @@ public partial class EditorWindow : Window
     private const double MinZoom = 0.25;
     private const double MaxZoom = 4.0;
     
+    // Pixelate tool constants
+    private const string PixelateTag = "pixelate";
+    private const int PixelateBlockSize = 10;
+    private const int RenderDpi = 96;
+    
     // Resize fields
     private bool _isResizing;
     private ElementResizeMode _resizeMode = ElementResizeMode.None;
@@ -72,6 +77,9 @@ public partial class EditorWindow : Window
         
         // Add keyboard event handler for Delete key
         KeyDown += EditorWindow_KeyDown;
+        
+        // Add mouse wheel event handler for Ctrl + scroll zoom
+        MouseWheel += EditorWindow_MouseWheel;
     }
     
     private void EditorWindow_KeyDown(object sender, KeyEventArgs e)
@@ -159,6 +167,33 @@ public partial class EditorWindow : Window
                     e.Handled = true;
                     break;
             }
+        }
+    }
+    
+    private void EditorWindow_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        // Only zoom when Ctrl is pressed
+        if (Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (e.Delta > 0)
+            {
+                // Scroll up = Zoom in
+                if (_zoomLevel < MaxZoom)
+                {
+                    _zoomLevel += ZoomIncrement;
+                    ApplyZoom();
+                }
+            }
+            else
+            {
+                // Scroll down = Zoom out
+                if (_zoomLevel > MinZoom)
+                {
+                    _zoomLevel -= ZoomIncrement;
+                    ApplyZoom();
+                }
+            }
+            e.Handled = true;
         }
     }
     
@@ -382,6 +417,15 @@ public partial class EditorWindow : Window
 
         if (_isDrawing && _currentShape != null)
         {
+            // Apply pixelation effect if this is a pixelate rectangle
+            if (_currentTool == AnnotationTool.Blur && _currentShape is Rectangle pixelateRect)
+            {
+                // Only apply pixelation if the rectangle has a reasonable size
+                if (pixelateRect.Width > 5 && pixelateRect.Height > 5)
+                {
+                    pixelateRect.Fill = CreatePixelatedBrush(pixelateRect);
+                }
+            }
             _undoStack.Push(_currentShape);
         }
         _isDrawing = false;
@@ -528,53 +572,110 @@ public partial class EditorWindow : Window
 
     private Rectangle CreateBlurRectangle()
     {
-        // Create a pixelate effect using a tiled pattern
-        // This is irreversible as we're creating solid colored blocks
+        // Create a rectangle that will pixelate the area underneath it
         var rect = new Rectangle
         {
             Stroke = new SolidColorBrush(Colors.Transparent),
             StrokeThickness = 0,
-            // Use a visual brush with a drawing to create pixelated effect
-            Fill = CreatePixelatedBrush()
+            // Initially use a semi-transparent fill - will be replaced with pixelated image when drawn
+            Fill = new SolidColorBrush(Color.FromArgb(128, 128, 128, 128)),
+            Tag = PixelateTag // Tag to identify this as a pixelate rectangle
         };
         return rect;
     }
     
-    private Brush CreatePixelatedBrush()
+    private Brush CreatePixelatedBrush(Rectangle pixelateRect)
     {
-        // Create a solid gray brush as pixelation - we'll apply actual pixelation on render
-        // For a true pixelate effect that can't be reversed, we use a mosaic pattern
-        var pixelSize = 10;
-        var drawing = new GeometryDrawing();
-        var drawingGroup = new DrawingGroup();
+        // Get the position and size of the rectangle on the canvas
+        var left = Canvas.GetLeft(pixelateRect);
+        var top = Canvas.GetTop(pixelateRect);
+        if (double.IsNaN(left)) left = 0;
+        if (double.IsNaN(top)) top = 0;
         
-        // Create a checkerboard pattern to simulate pixelation
-        for (int i = 0; i < 10; i++)
+        var width = (int)pixelateRect.Width;
+        var height = (int)pixelateRect.Height;
+        
+        if (width <= 0 || height <= 0)
+            return pixelateRect.Fill;
+        
+        try
         {
-            for (int j = 0; j < 10; j++)
+            // Create a render target to capture the image area
+            var renderBitmap = new RenderTargetBitmap(
+                (int)_originalImage.PixelWidth,
+                (int)_originalImage.PixelHeight,
+                RenderDpi, RenderDpi,
+                PixelFormats.Pbgra32);
+            
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
             {
-                // Create random gray shades to simulate pixelation
-                var grayValue = (byte)(100 + (i + j) % 50);
-                var rect = new RectangleGeometry(new Rect(i * pixelSize, j * pixelSize, pixelSize, pixelSize));
-                var geoDrawing = new GeometryDrawing
-                {
-                    Brush = new SolidColorBrush(Color.FromRgb(grayValue, grayValue, grayValue)),
-                    Geometry = rect
-                };
-                drawingGroup.Children.Add(geoDrawing);
+                dc.DrawImage(_originalImage, new Rect(0, 0, _originalImage.PixelWidth, _originalImage.PixelHeight));
             }
+            renderBitmap.Render(visual);
+            
+            // Create a new bitmap for the pixelated version
+            var pixelatedBitmap = new RenderTargetBitmap(
+                width, height,
+                RenderDpi, RenderDpi,
+                PixelFormats.Pbgra32);
+            
+            var drawingVisual = new DrawingVisual();
+            using (var drawingContext = drawingVisual.RenderOpen())
+            {
+                // Draw pixelated blocks
+                for (int y = 0; y < height; y += PixelateBlockSize)
+                {
+                    for (int x = 0; x < width; x += PixelateBlockSize)
+                    {
+                        // Calculate the actual block size (handle edges)
+                        var blockWidth = Math.Min(PixelateBlockSize, width - x);
+                        var blockHeight = Math.Min(PixelateBlockSize, height - y);
+                        
+                        // Sample the center pixel of this block from the original image
+                        var sampleX = (int)(left + x + blockWidth / 2);
+                        var sampleY = (int)(top + y + blockHeight / 2);
+                        
+                        // Ensure we're within bounds
+                        sampleX = Math.Max(0, Math.Min(sampleX, _originalImage.PixelWidth - 1));
+                        sampleY = Math.Max(0, Math.Min(sampleY, _originalImage.PixelHeight - 1));
+                        
+                        // Get the color at this position
+                        var croppedBitmap = new CroppedBitmap(renderBitmap, 
+                            new Int32Rect(sampleX, sampleY, 1, 1));
+                        
+                        var pixels = new byte[4];
+                        croppedBitmap.CopyPixels(pixels, 4, 0);
+                        
+                        var color = Color.FromArgb(pixels[3], pixels[2], pixels[1], pixels[0]);
+                        
+                        // Draw a rectangle with this color
+                        drawingContext.DrawRectangle(
+                            new SolidColorBrush(color),
+                            null,
+                            new Rect(x, y, blockWidth, blockHeight));
+                    }
+                }
+            }
+            
+            pixelatedBitmap.Render(drawingVisual);
+            
+            // Create an ImageBrush from the pixelated bitmap
+            return new ImageBrush(pixelatedBitmap)
+            {
+                Stretch = Stretch.Fill
+            };
         }
-        
-        var brush = new DrawingBrush
+        catch (ArgumentException)
         {
-            Drawing = drawingGroup,
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, pixelSize * 10, pixelSize * 10),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None
-        };
-        
-        return brush;
+            // Fallback to a gray pattern if image dimensions are invalid
+            return new SolidColorBrush(Color.FromArgb(200, 128, 128, 128));
+        }
+        catch (InvalidOperationException)
+        {
+            // Fallback if rendering fails
+            return new SolidColorBrush(Color.FromArgb(200, 128, 128, 128));
+        }
     }
 
     private void UpdateRectangle(Point currentPoint)

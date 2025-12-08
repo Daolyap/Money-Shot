@@ -20,6 +20,9 @@ public partial class MainWindow : Window
     private readonly SettingsService _settingsService;
     private readonly HotKeyService _hotKeyService;
     private NotifyIcon? _notifyIcon;
+    
+    // Maximum number of monitors that can have individual hotkeys (limited by number keys 1-9)
+    private const int MaxMonitorHotkeys = 9;
 
     public MainWindow()
     {
@@ -105,6 +108,18 @@ public partial class MainWindow : Window
         {
             Dispatcher.Invoke(CaptureRegion);
         });
+        
+        // Register PrintScreen + Number hotkeys for individual monitors
+        var screens = _screenshotService.GetAllScreens();
+        for (int i = 0; i < Math.Min(screens.Count, MaxMonitorHotkeys); i++)
+        {
+            var monitorIndex = i;
+            var hotkey = $"PrintScreen+{i + 1}";
+            _hotKeyService.RegisterHotKeyFromString(hotkey, () =>
+            {
+                Dispatcher.Invoke(() => CaptureMonitor(monitorIndex));
+            });
+        }
     }
 
     public void ReloadHotKeys()
@@ -253,15 +268,15 @@ public partial class MainWindow : Window
         {
             var editor = new EditorWindow(screenshot);
             editor.ShowDialog();
+            // Don't show main window here - let it stay hidden as per user preference
+            // Main window will only be shown if an error occurs (see catch block)
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error opening editor: {ex.Message}");
             System.Windows.MessageBox.Show($"Failed to open image editor: {ex.Message}", "Editor Error", 
                 MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
+            // Show main window when error occurs so user knows something went wrong
             ShowMainWindow();
         }
     }
