@@ -15,16 +15,10 @@
     <UIRef Id="WixUI_ErrorProgressText" />
 
     <!-- Customize the license agreement -->
-    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" Condition="NOT Installed" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
 
     <!-- Define properties for customization -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    
-    <!-- Property to control desktop shortcut creation -->
-    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" />
-    
-    <!-- Property to control startup with Windows -->
-    <Property Id="RUNONSTARTUP" Value="0" />
 
     <!-- Define the directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">
@@ -46,7 +40,6 @@
 
         <!-- Desktop shortcut component (optional) -->
         <Component Id="DesktopShortcut" Bitness="always64">
-          <Condition>INSTALLDESKTOPSHORTCUT = 1</Condition>
           <Shortcut Id="DesktopShortcut"
                     Directory="DesktopFolder"
                     Name="Money Shot"
@@ -64,7 +57,6 @@
 
         <!-- Startup registry entry component (optional) -->
         <Component Id="StartupRegistry" Bitness="always64">
-          <Condition>RUNONSTARTUP = 1</Condition>
           <RegistryValue Root="HKCU" 
                          Key="Software\Microsoft\Windows\CurrentVersion\Run" 
                          Name="MoneyShot" 
