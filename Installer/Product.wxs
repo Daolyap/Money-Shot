@@ -15,7 +15,7 @@
     <UIRef Id="WixUI_ErrorProgressText" />
 
     <!-- Customize the license agreement -->
-    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <WixVariable Id="WixUILicenseRtf" Value="Installer\License.rtf" />
 
     <!-- Define properties for customization -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
