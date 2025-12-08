@@ -412,6 +412,15 @@ public partial class EditorWindow : Window
 
         if (_isDrawing && _currentShape != null)
         {
+            // Apply pixelation effect if this is a pixelate rectangle
+            if (_currentTool == AnnotationTool.Blur && _currentShape is Rectangle pixelateRect)
+            {
+                // Only apply pixelation if the rectangle has a reasonable size
+                if (pixelateRect.Width > 5 && pixelateRect.Height > 5)
+                {
+                    pixelateRect.Fill = CreatePixelatedBrush(pixelateRect);
+                }
+            }
             _undoStack.Push(_currentShape);
         }
         _isDrawing = false;
@@ -558,53 +567,108 @@ public partial class EditorWindow : Window
 
     private Rectangle CreateBlurRectangle()
     {
-        // Create a pixelate effect using a tiled pattern
-        // This is irreversible as we're creating solid colored blocks
+        // Create a rectangle that will pixelate the area underneath it
         var rect = new Rectangle
         {
             Stroke = new SolidColorBrush(Colors.Transparent),
             StrokeThickness = 0,
-            // Use a visual brush with a drawing to create pixelated effect
-            Fill = CreatePixelatedBrush()
+            // Initially use a semi-transparent fill - will be replaced with pixelated image when drawn
+            Fill = new SolidColorBrush(Color.FromArgb(128, 128, 128, 128)),
+            Tag = "pixelate" // Tag to identify this as a pixelate rectangle
         };
         return rect;
     }
     
-    private Brush CreatePixelatedBrush()
+    private Brush CreatePixelatedBrush(Rectangle pixelateRect)
     {
-        // Create a solid gray brush as pixelation - we'll apply actual pixelation on render
-        // For a true pixelate effect that can't be reversed, we use a mosaic pattern
+        // Get the position and size of the rectangle on the canvas
+        var left = Canvas.GetLeft(pixelateRect);
+        var top = Canvas.GetTop(pixelateRect);
+        if (double.IsNaN(left)) left = 0;
+        if (double.IsNaN(top)) top = 0;
+        
+        var width = (int)pixelateRect.Width;
+        var height = (int)pixelateRect.Height;
+        
+        if (width <= 0 || height <= 0)
+            return pixelateRect.Fill;
+        
+        // Pixel size for the mosaic effect
         var pixelSize = 10;
-        var drawing = new GeometryDrawing();
-        var drawingGroup = new DrawingGroup();
         
-        // Create a checkerboard pattern to simulate pixelation
-        for (int i = 0; i < 10; i++)
+        try
         {
-            for (int j = 0; j < 10; j++)
+            // Create a render target to capture the image area
+            var renderBitmap = new RenderTargetBitmap(
+                (int)_originalImage.PixelWidth,
+                (int)_originalImage.PixelHeight,
+                96, 96,
+                PixelFormats.Pbgra32);
+            
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
             {
-                // Create random gray shades to simulate pixelation
-                var grayValue = (byte)(100 + (i + j) % 50);
-                var rect = new RectangleGeometry(new Rect(i * pixelSize, j * pixelSize, pixelSize, pixelSize));
-                var geoDrawing = new GeometryDrawing
-                {
-                    Brush = new SolidColorBrush(Color.FromRgb(grayValue, grayValue, grayValue)),
-                    Geometry = rect
-                };
-                drawingGroup.Children.Add(geoDrawing);
+                dc.DrawImage(_originalImage, new Rect(0, 0, _originalImage.PixelWidth, _originalImage.PixelHeight));
             }
+            renderBitmap.Render(visual);
+            
+            // Create a new bitmap for the pixelated version
+            var pixelatedBitmap = new RenderTargetBitmap(
+                width, height,
+                96, 96,
+                PixelFormats.Pbgra32);
+            
+            var drawingVisual = new DrawingVisual();
+            using (var drawingContext = drawingVisual.RenderOpen())
+            {
+                // Draw pixelated blocks
+                for (int y = 0; y < height; y += pixelSize)
+                {
+                    for (int x = 0; x < width; x += pixelSize)
+                    {
+                        // Calculate the actual block size (handle edges)
+                        var blockWidth = Math.Min(pixelSize, width - x);
+                        var blockHeight = Math.Min(pixelSize, height - y);
+                        
+                        // Sample the center pixel of this block from the original image
+                        var sampleX = (int)(left + x + blockWidth / 2);
+                        var sampleY = (int)(top + y + blockHeight / 2);
+                        
+                        // Ensure we're within bounds
+                        sampleX = Math.Max(0, Math.Min(sampleX, _originalImage.PixelWidth - 1));
+                        sampleY = Math.Max(0, Math.Min(sampleY, _originalImage.PixelHeight - 1));
+                        
+                        // Get the color at this position
+                        var croppedBitmap = new CroppedBitmap(renderBitmap, 
+                            new Int32Rect(sampleX, sampleY, 1, 1));
+                        
+                        var pixels = new byte[4];
+                        croppedBitmap.CopyPixels(pixels, 4, 0);
+                        
+                        var color = Color.FromArgb(pixels[3], pixels[2], pixels[1], pixels[0]);
+                        
+                        // Draw a rectangle with this color
+                        drawingContext.DrawRectangle(
+                            new SolidColorBrush(color),
+                            null,
+                            new Rect(x, y, blockWidth, blockHeight));
+                    }
+                }
+            }
+            
+            pixelatedBitmap.Render(drawingVisual);
+            
+            // Create an ImageBrush from the pixelated bitmap
+            return new ImageBrush(pixelatedBitmap)
+            {
+                Stretch = Stretch.Fill
+            };
         }
-        
-        var brush = new DrawingBrush
+        catch
         {
-            Drawing = drawingGroup,
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, pixelSize * 10, pixelSize * 10),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None
-        };
-        
-        return brush;
+            // Fallback to a gray pattern if pixelation fails
+            return new SolidColorBrush(Color.FromArgb(200, 128, 128, 128));
+        }
     }
 
     private void UpdateRectangle(Point currentPoint)
