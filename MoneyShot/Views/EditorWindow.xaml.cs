@@ -32,6 +32,11 @@ public partial class EditorWindow : Window
     private const double MinZoom = 0.25;
     private const double MaxZoom = 4.0;
     
+    // Pixelate tool constants
+    private const string PixelateTag = "pixelate";
+    private const int PixelateBlockSize = 10;
+    private const int RenderDpi = 96;
+    
     // Resize fields
     private bool _isResizing;
     private ElementResizeMode _resizeMode = ElementResizeMode.None;
@@ -574,7 +579,7 @@ public partial class EditorWindow : Window
             StrokeThickness = 0,
             // Initially use a semi-transparent fill - will be replaced with pixelated image when drawn
             Fill = new SolidColorBrush(Color.FromArgb(128, 128, 128, 128)),
-            Tag = "pixelate" // Tag to identify this as a pixelate rectangle
+            Tag = PixelateTag // Tag to identify this as a pixelate rectangle
         };
         return rect;
     }
@@ -593,16 +598,13 @@ public partial class EditorWindow : Window
         if (width <= 0 || height <= 0)
             return pixelateRect.Fill;
         
-        // Pixel size for the mosaic effect
-        var pixelSize = 10;
-        
         try
         {
             // Create a render target to capture the image area
             var renderBitmap = new RenderTargetBitmap(
                 (int)_originalImage.PixelWidth,
                 (int)_originalImage.PixelHeight,
-                96, 96,
+                RenderDpi, RenderDpi,
                 PixelFormats.Pbgra32);
             
             var visual = new DrawingVisual();
@@ -615,20 +617,20 @@ public partial class EditorWindow : Window
             // Create a new bitmap for the pixelated version
             var pixelatedBitmap = new RenderTargetBitmap(
                 width, height,
-                96, 96,
+                RenderDpi, RenderDpi,
                 PixelFormats.Pbgra32);
             
             var drawingVisual = new DrawingVisual();
             using (var drawingContext = drawingVisual.RenderOpen())
             {
                 // Draw pixelated blocks
-                for (int y = 0; y < height; y += pixelSize)
+                for (int y = 0; y < height; y += PixelateBlockSize)
                 {
-                    for (int x = 0; x < width; x += pixelSize)
+                    for (int x = 0; x < width; x += PixelateBlockSize)
                     {
                         // Calculate the actual block size (handle edges)
-                        var blockWidth = Math.Min(pixelSize, width - x);
-                        var blockHeight = Math.Min(pixelSize, height - y);
+                        var blockWidth = Math.Min(PixelateBlockSize, width - x);
+                        var blockHeight = Math.Min(PixelateBlockSize, height - y);
                         
                         // Sample the center pixel of this block from the original image
                         var sampleX = (int)(left + x + blockWidth / 2);
@@ -664,9 +666,14 @@ public partial class EditorWindow : Window
                 Stretch = Stretch.Fill
             };
         }
-        catch
+        catch (ArgumentException)
         {
-            // Fallback to a gray pattern if pixelation fails
+            // Fallback to a gray pattern if image dimensions are invalid
+            return new SolidColorBrush(Color.FromArgb(200, 128, 128, 128));
+        }
+        catch (InvalidOperationException)
+        {
+            // Fallback if rendering fails
             return new SolidColorBrush(Color.FromArgb(200, 128, 128, 128));
         }
     }
