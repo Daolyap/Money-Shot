@@ -12,10 +12,11 @@
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
-    <Company>Money Shot</Company>
+    <Company>Daolyap &amp; iSaluki</Company>
+    <Authors>Daolyap &amp; iSaluki</Authors>
     <Product>Money Shot Screenshot Tool</Product>
     <Description>A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive annotation capabilities.</Description>
-    <Copyright>Copyright © 2024</Copyright>
+    <Copyright>Copyright © 2024 Daolyap &amp; iSaluki</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

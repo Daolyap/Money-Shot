@@ -1,13 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="Money Shot"
-           Manufacturer="Money Shot"
+           Manufacturer="Daolyap &amp; iSaluki"
            Version="1.0.0"
            UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
     
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     
     <MediaTemplate EmbedCab="yes" />
+
+    <!-- Use WiX UI for a graphical installer experience -->
+    <ui:WixUI Id="WixUI_FeatureTree" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+    <!-- Customize the license agreement -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" Condition="NOT Installed" />
+
+    <!-- Define properties for customization -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    
+    <!-- Property to control desktop shortcut creation -->
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" />
+    
+    <!-- Property to control startup with Windows -->
+    <Property Id="RUNONSTARTUP" Value="0" />
 
     <!-- Define the directory structure -->
     <StandardDirectory Id="ProgramFiles64Folder">
@@ -16,6 +33,7 @@
           <File Id="MoneyShotExe" 
                 Source="$(var.PublishDir)\MoneyShot.exe" 
                 KeyPath="yes">
+            <!-- Start Menu shortcut (always created) -->
             <Shortcut Id="StartMenuShortcut"
                       Directory="ProgramMenuFolder"
                       Name="Money Shot"
@@ -23,19 +41,39 @@
                       WorkingDirectory="INSTALLFOLDER"
                       Icon="MoneyShotIcon.exe"
                       Advertise="yes" />
-            <Shortcut Id="DesktopShortcut"
-                      Directory="DesktopFolder"
-                      Name="Money Shot"
-                      Description="Modern screenshot tool with annotation capabilities"
-                      WorkingDirectory="INSTALLFOLDER"
-                      Icon="MoneyShotIcon.exe"
-                      Advertise="yes" />
           </File>
+        </Component>
+
+        <!-- Desktop shortcut component (optional) -->
+        <Component Id="DesktopShortcut" Bitness="always64">
+          <Condition>INSTALLDESKTOPSHORTCUT = 1</Condition>
+          <Shortcut Id="DesktopShortcut"
+                    Directory="DesktopFolder"
+                    Name="Money Shot"
+                    Description="Modern screenshot tool with annotation capabilities"
+                    Target="[INSTALLFOLDER]MoneyShot.exe"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="MoneyShotIcon.exe" />
+          <RegistryValue Root="HKCU" 
+                         Key="Software\[Manufacturer]\[ProductName]" 
+                         Name="DesktopShortcut" 
+                         Type="integer" 
+                         Value="1" 
+                         KeyPath="yes" />
+        </Component>
+
+        <!-- Startup registry entry component (optional) -->
+        <Component Id="StartupRegistry" Bitness="always64">
+          <Condition>RUNONSTARTUP = 1</Condition>
+          <RegistryValue Root="HKCU" 
+                         Key="Software\Microsoft\Windows\CurrentVersion\Run" 
+                         Name="MoneyShot" 
+                         Value="[INSTALLFOLDER]MoneyShot.exe" 
+                         Type="string" 
+                         KeyPath="yes" />
         </Component>
         
         <!-- Include all published files -->
-        <!-- Note: Files are explicitly listed for clarity and control.
-             For larger applications, consider using WiX heat tool to auto-harvest files. -->
         <Component Id="PublishedFiles" Bitness="always64">
           <File Id="MoneyShotDll" Source="$(var.PublishDir)\MoneyShot.dll" />
           <File Id="MoneyShotRuntimeConfig" Source="$(var.PublishDir)\MoneyShot.runtimeconfig.json" />
@@ -47,10 +85,29 @@
     <StandardDirectory Id="ProgramMenuFolder" />
     <StandardDirectory Id="DesktopFolder" />
 
-    <!-- Define features -->
-    <Feature Id="ProductFeature" Title="Money Shot" Level="1">
+    <!-- Define features with customization options -->
+    <Feature Id="ProductFeature" Title="Money Shot" Level="1" 
+             Description="Core application files" 
+             Display="expand"
+             ConfigurableDirectory="INSTALLFOLDER">
       <ComponentRef Id="MainExecutable" />
       <ComponentRef Id="PublishedFiles" />
+      
+      <!-- Optional desktop shortcut feature -->
+      <Feature Id="DesktopShortcutFeature" 
+               Title="Desktop Shortcut" 
+               Level="1"
+               Description="Creates a shortcut on your desktop">
+        <ComponentRef Id="DesktopShortcut" />
+      </Feature>
+      
+      <!-- Optional startup feature -->
+      <Feature Id="StartupFeature" 
+               Title="Run on Startup" 
+               Level="1000"
+               Description="Automatically start Money Shot when Windows starts">
+        <ComponentRef Id="StartupRegistry" />
+      </Feature>
     </Feature>
 
     <!-- Icon for shortcuts and Add/Remove Programs -->

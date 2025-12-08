@@ -98,7 +98,7 @@ public class HotKeyService
     public const uint MOD_WIN = 0x0008;
 
     /// <summary>
-    /// Parse a hotkey string like "Ctrl+PrintScreen" or "Alt+F1" into modifiers and key code
+    /// Parse a hotkey string like "Ctrl+PrintScreen", "Alt+F1", or "Ctrl+Shift+1" into modifiers and key code
     /// </summary>
     public static (uint modifiers, uint key) ParseHotKey(string hotkeyString)
     {

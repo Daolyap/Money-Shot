@@ -109,12 +109,12 @@ public partial class MainWindow : Window
             Dispatcher.Invoke(CaptureRegion);
         });
         
-        // Register PrintScreen + Number hotkeys for individual monitors
+        // Register Ctrl+Shift+Number hotkeys for individual monitors (PrintScreen+Number not supported by Windows API)
         var screens = _screenshotService.GetAllScreens();
         for (int i = 0; i < Math.Min(screens.Count, MaxMonitorHotkeys); i++)
         {
             var monitorIndex = i;
-            var hotkey = $"PrintScreen+{i + 1}";
+            var hotkey = $"Ctrl+Shift+{i + 1}";
             _hotKeyService.RegisterHotKeyFromString(hotkey, () =>
             {
                 Dispatcher.Invoke(() => CaptureMonitor(monitorIndex));
@@ -319,6 +319,9 @@ public partial class MainWindow : Window
     private void About_Click(object sender, RoutedEventArgs e)
     {
         var settings = _settingsService.LoadSettings();
+        var screens = _screenshotService.GetAllScreens();
+        var monitorHotkeys = screens.Count > 1 ? $"\n• Ctrl+Shift+1-{Math.Min(screens.Count, MaxMonitorHotkeys)} - Capture individual monitors" : "";
+        
         System.Windows.MessageBox.Show(
             "Money Shot - Modern Screenshot Tool\n\n" +
             "Version 2.0.0\n\n" +
@@ -333,7 +336,8 @@ public partial class MainWindow : Window
             "• Start in tray option\n\n" +
             "Current Hotkeys:\n" +
             $"• {settings.HotKeyCapture} - Capture full screen\n" +
-            $"• {settings.HotKeyRegionCapture} - Capture region",
+            $"• {settings.HotKeyRegionCapture} - Capture region" +
+            monitorHotkeys,
             "About Money Shot",
             MessageBoxButton.OK,
             MessageBoxImage.Information);

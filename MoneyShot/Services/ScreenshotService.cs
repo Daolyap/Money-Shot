@@ -17,7 +17,7 @@ public class ScreenshotService
 
     public BitmapSource CaptureRegion(Rectangle region)
     {
-        using var bitmap = new Bitmap(region.Width, region.Height, PixelFormat.Format32bppArgb);
+        using var bitmap = new Bitmap(region.Width, region.Height, PixelFormat.Format32bppPArgb);
         using (var graphics = Graphics.FromImage(bitmap))
         {
             graphics.CopyFromScreen(region.Left, region.Top, 0, 0, region.Size, CopyPixelOperation.SourceCopy);
@@ -66,11 +66,15 @@ public class ScreenshotService
         var hBitmap = bitmap.GetHbitmap();
         try
         {
-            return Imaging.CreateBitmapSourceFromHBitmap(
+            var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap(
                 hBitmap,
                 IntPtr.Zero,
                 Int32Rect.Empty,
                 BitmapSizeOptions.FromEmptyOptions());
+            
+            // Freeze the bitmap source to make it thread-safe and improve performance
+            bitmapSource.Freeze();
+            return bitmapSource;
         }
         finally
         {
