@@ -105,6 +105,18 @@ public partial class MainWindow : Window
         {
             Dispatcher.Invoke(CaptureRegion);
         });
+        
+        // Register PrintScreen + Number hotkeys for individual monitors
+        var screens = _screenshotService.GetAllScreens();
+        for (int i = 0; i < Math.Min(screens.Count, 9); i++)
+        {
+            var monitorIndex = i;
+            var hotkey = $"PrintScreen+{i + 1}";
+            _hotKeyService.RegisterHotKeyFromString(hotkey, () =>
+            {
+                Dispatcher.Invoke(() => CaptureMonitor(monitorIndex));
+            });
+        }
     }
 
     public void ReloadHotKeys()
@@ -259,9 +271,6 @@ public partial class MainWindow : Window
             System.Diagnostics.Debug.WriteLine($"Error opening editor: {ex.Message}");
             System.Windows.MessageBox.Show($"Failed to open image editor: {ex.Message}", "Editor Error", 
                 MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
             ShowMainWindow();
         }
     }
