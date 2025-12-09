@@ -1367,7 +1367,15 @@ public partial class EditorWindow : Window
         }
         else if (e.ClickCount == 1)
         {
-            DragMove();
+            try
+            {
+                DragMove();
+            }
+            catch (InvalidOperationException)
+            {
+                // DragMove can throw if window state is changing or mouse is not pressed
+                // Silently ignore these cases
+            }
         }
     }
     
