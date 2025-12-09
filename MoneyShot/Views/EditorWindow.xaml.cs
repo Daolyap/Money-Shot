@@ -121,8 +121,8 @@ public partial class EditorWindow : Window
                     e.Handled = true;
                     break;
                 case Key.Escape:
-                    _currentTool = AnnotationTool.Cursor;
-                    ClearSelection();
+                    // Close the editor window and cancel the screenshot
+                    Close();
                     e.Handled = true;
                     break;
                 case Key.Delete:
