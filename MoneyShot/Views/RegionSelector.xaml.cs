@@ -4,7 +4,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
-using MoneyShot.Services;
 using DrawingRectangle = System.Drawing.Rectangle;
 
 namespace MoneyShot.Views;
@@ -16,18 +15,16 @@ public partial class RegionSelector : Window
     private bool _isSelecting;
     private int _virtualScreenLeft;
     private int _virtualScreenTop;
-    private readonly ScreenshotService _screenshotService;
 
     public DrawingRectangle? SelectedRegion { get; private set; }
 
-    public RegionSelector()
+    public RegionSelector(BitmapSource frozenScreen)
     {
         InitializeComponent();
-        _screenshotService = new ScreenshotService();
-        SetupFullScreenOverlay();
+        SetupFullScreenOverlay(frozenScreen);
     }
 
-    private void SetupFullScreenOverlay()
+    private void SetupFullScreenOverlay(BitmapSource frozenScreen)
     {
         // Calculate virtual screen bounds (all monitors)
         int minX = int.MaxValue;
@@ -63,21 +60,13 @@ public partial class RegionSelector : Window
         // Show immediately to prevent black screen
         ShowInTaskbar = false;
         
-        // Capture and display the frozen screen in the background
-        CaptureAndDisplayFrozenScreen();
-    }
-    
-    private void CaptureAndDisplayFrozenScreen()
-    {
+        // Display the frozen screen in the background
         try
         {
-            // Capture the full screen before showing the overlay
-            var screenshot = _screenshotService.CaptureFullScreen();
-            
             // Set the frozen screenshot as the background
             if (BackgroundImage != null)
             {
-                BackgroundImage.Source = screenshot;
+                BackgroundImage.Source = frozenScreen;
                 BackgroundImage.Stretch = Stretch.Fill;
             }
             
@@ -86,7 +75,7 @@ public partial class RegionSelector : Window
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error capturing frozen screen: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error displaying frozen screen: {ex.Message}");
             // Fallback to just the overlay without frozen background
             Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0));
         }

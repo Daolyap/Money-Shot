@@ -79,7 +79,8 @@ public partial class EditorWindow : Window
         KeyDown += EditorWindow_KeyDown;
         
         // Add mouse wheel event handler for Ctrl + scroll zoom
-        MouseWheel += EditorWindow_MouseWheel;
+        // Use PreviewMouseWheel to catch before ScrollViewer
+        PreviewMouseWheel += EditorWindow_MouseWheel;
     }
     
     private void EditorWindow_KeyDown(object sender, KeyEventArgs e)
@@ -1355,5 +1356,23 @@ public partial class EditorWindow : Window
         ImageCanvas.UpdateLayout();
         
         return renderBitmap;
+    }
+    
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 1)
+        {
+            DragMove();
+        }
+    }
+    
+    private void Minimize_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+    
+    private void Close_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
     }
 }

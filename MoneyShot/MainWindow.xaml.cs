@@ -218,10 +218,13 @@ public partial class MainWindow : Window
     {
         try
         {
+            // Capture the screen BEFORE hiding the window to get a frozen snapshot
+            var frozenScreen = _screenshotService.CaptureFullScreen();
+            
             Hide();
             System.Threading.Thread.Sleep(200);
 
-            var regionSelector = new RegionSelector();
+            var regionSelector = new RegionSelector(frozenScreen);
             if (regionSelector.ShowDialog() == true && regionSelector.SelectedRegion != null)
             {
                 var screenshot = _screenshotService.CaptureRegion(regionSelector.SelectedRegion.Value);
