@@ -1,15 +1,15 @@
-# 💰 Money Shot
+# Money Shot
 
 A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive annotation capabilities.
 
-## ✨ Features
+## Features
 
 ### 📸 Capture Modes
 - **Full Screen Capture** - Capture all monitors at once
 - **Region Selection** - Select and capture specific areas
 - **Multi-Monitor Support** - Works seamlessly across multiple displays
 
-### 🎨 Annotation Tools
+### Annotation Tools
 - **Shapes**: Rectangles, circles, arrows, and lines
 - **Colors**: Multiple color options for all tools
 - **Text**: Add text annotations with customizable fonts
@@ -17,13 +17,13 @@ A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive 
 - **Blur Tool**: Blur sensitive information (planned)
 - **Undo/Redo**: Easily correct mistakes
 
-### 💾 Save Options
+### Save Options
 - **Clipboard**: Copy screenshots directly to clipboard
 - **File**: Save as PNG, JPG, or BMP
 - **Both**: Save to both clipboard and file simultaneously
 - **Custom Path**: Configure default save location
 
-### ⚡ Productivity Features
+### Productivity Features
 - **Global Hotkeys**:
   - `Print Screen` - Capture full screen
   - `Ctrl + Print Screen` - Capture region
@@ -31,7 +31,7 @@ A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive 
 - **Startup Integration**: Optional auto-start with Windows
 - **Modern UI**: Clean, dark-themed interface optimized for Windows 11
 
-## 🚀 Installation
+## Installation
 
 ### Option 1: MSI Installer (Recommended)
 1. Go to [Releases](https://github.com/Daolyap/Money-Shot/releases)
@@ -61,7 +61,7 @@ dotnet build MoneyShot/MoneyShot.csproj --configuration Release
 dotnet run --project MoneyShot/MoneyShot.csproj
 ```
 
-## 📖 Usage
+## Usage
 
 ### Quick Start
 1. Launch Money Shot
@@ -79,14 +79,14 @@ Access settings from the main window or system tray menu to configure:
 - Run on Windows startup
 - Minimize to tray behavior
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 - **Framework**: .NET 8
 - **UI**: WPF (Windows Presentation Foundation)
 - **Language**: C# 12
 - **Target OS**: Windows 11+ (Windows 10 compatible)
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 MoneyShot/
@@ -104,7 +104,7 @@ MoneyShot/
 └── Helpers/          # Utility classes
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -114,7 +114,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📋 Roadmap
+## Roadmap
 
 - [x] Full screen capture
 - [x] Region selection
@@ -135,20 +135,20 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [ ] Quick share to cloud services
 - [ ] Auto-update functionality
 
-## 📄 License
+## License
 
 This project is open source. See the LICENSE file for details.
 
-## 🐛 Known Issues
+## Known Issues
 
 - Hotkeys may conflict with other applications
 - High DPI scaling needs testing on various displays
 
-## 💡 Why "Money Shot"?
+## Why "Money Shot"?
 
 Because every screenshot should be worth a thousand words... and dollars! 💰
 
-## 📞 Support
+## Support
 
 If you encounter any issues or have suggestions, please [open an issue](https://github.com/Daolyap/Money-Shot/issues) on GitHub.
 
