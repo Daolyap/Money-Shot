@@ -225,10 +225,10 @@ public partial class MainWindow : Window
             System.Threading.Thread.Sleep(200);
 
             var regionSelector = new RegionSelector(frozenScreen);
-            if (regionSelector.ShowDialog() == true && regionSelector.SelectedRegion != null)
+            if (regionSelector.ShowDialog() == true && regionSelector.CroppedScreenshot != null)
             {
-                var screenshot = _screenshotService.CaptureRegion(regionSelector.SelectedRegion.Value);
-                OpenEditor(screenshot);
+                // Use the cropped screenshot from the frozen screen, not a new capture
+                OpenEditor(regionSelector.CroppedScreenshot);
             }
             else
             {

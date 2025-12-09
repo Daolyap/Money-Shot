@@ -15,12 +15,15 @@ public partial class RegionSelector : Window
     private bool _isSelecting;
     private int _virtualScreenLeft;
     private int _virtualScreenTop;
+    private readonly BitmapSource _frozenScreen;
 
     public DrawingRectangle? SelectedRegion { get; private set; }
+    public BitmapSource? CroppedScreenshot { get; private set; }
 
     public RegionSelector(BitmapSource frozenScreen)
     {
         InitializeComponent();
+        _frozenScreen = frozenScreen;
         SetupFullScreenOverlay(frozenScreen);
     }
 
@@ -138,7 +141,35 @@ public partial class RegionSelector : Window
                 var absoluteY = y + _virtualScreenTop;
                 
                 SelectedRegion = new DrawingRectangle(absoluteX, absoluteY, width, height);
-                DialogResult = true;
+                
+                // Crop the selected region from the frozen screenshot
+                try
+                {
+                    // The frozen screenshot coordinates are relative to the virtual screen
+                    // Convert absolute screen coordinates to frozen screenshot coordinates
+                    var cropX = absoluteX - _virtualScreenLeft;
+                    var cropY = absoluteY - _virtualScreenTop;
+                    
+                    // Ensure coordinates are within bounds
+                    cropX = Math.Max(0, Math.Min(cropX, _frozenScreen.PixelWidth - width));
+                    cropY = Math.Max(0, Math.Min(cropY, _frozenScreen.PixelHeight - height));
+                    width = Math.Min(width, _frozenScreen.PixelWidth - cropX);
+                    height = Math.Min(height, _frozenScreen.PixelHeight - cropY);
+                    
+                    // Crop the image from the frozen screenshot
+                    var croppedBitmap = new CroppedBitmap(_frozenScreen, new Int32Rect(cropX, cropY, width, height));
+                    
+                    // Freeze it to make it thread-safe
+                    croppedBitmap.Freeze();
+                    CroppedScreenshot = croppedBitmap;
+                    
+                    DialogResult = true;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error cropping frozen screenshot: {ex.Message}");
+                    DialogResult = false;
+                }
             }
             else
             {
