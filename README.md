@@ -4,7 +4,7 @@ A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive 
 
 ## Features
 
-### 📸 Capture Modes
+### Capture Modes
 - **Full Screen Capture** - Capture all monitors at once
 - **Region Selection** - Select and capture specific areas
 - **Multi-Monitor Support** - Works seamlessly across multiple displays
