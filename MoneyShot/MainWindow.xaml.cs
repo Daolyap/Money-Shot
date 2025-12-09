@@ -369,4 +369,47 @@ public partial class MainWindow : Window
             ExitApplication();
         }
     }
+    
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            // Double-click to maximize/restore
+            MaximizeRestore_Click(sender, e);
+        }
+        else if (e.ClickCount == 1)
+        {
+            DragMove();
+        }
+    }
+    
+    private void Minimize_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+    
+    private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+            if (MaximizeRestoreButton != null)
+            {
+                MaximizeRestoreButton.Content = "🗖";
+            }
+        }
+        else
+        {
+            WindowState = WindowState.Maximized;
+            if (MaximizeRestoreButton != null)
+            {
+                MaximizeRestoreButton.Content = "🗗";
+            }
+        }
+    }
+    
+    private void Close_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
 }

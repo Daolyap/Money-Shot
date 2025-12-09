@@ -6,7 +6,8 @@
         WindowStartupLocation="CenterScreen"
         Background="Transparent"
         AllowsTransparency="True"
-        WindowStyle="None">
+        WindowStyle="None"
+        ResizeMode="CanResize">
     <Window.Resources>
         <!-- Glassmorphism Button Style -->
         <Style x:Key="GlassButton" TargetType="Button">
@@ -145,6 +146,8 @@
                                Margin="15,0,0,0"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,5,0">
                         <Button Content="🗕" Click="Minimize_Click" Style="{StaticResource GlassButton}" 
+                                Width="40" Height="28" Padding="0" Margin="2,0"/>
+                        <Button Content="🗖" Name="MaximizeRestoreButton" Click="MaximizeRestore_Click" Style="{StaticResource GlassButton}" 
                                 Width="40" Height="28" Padding="0" Margin="2,0"/>
                         <Button Content="🗙" Click="Close_Click" Style="{StaticResource GlassButton}" 
                                 Width="40" Height="28" Padding="0" Margin="2,0"/>
