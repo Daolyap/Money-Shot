@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using MoneyShot.Models;
 using MoneyShot.Services;
 using Application = System.Windows.Application;
@@ -137,6 +138,57 @@ public partial class SettingsWindow : Window
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+    
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            // Double-click to maximize/restore
+            MaximizeRestore_Click(sender, e);
+        }
+        else if (e.ClickCount == 1)
+        {
+            try
+            {
+                DragMove();
+            }
+            catch (InvalidOperationException)
+            {
+                // DragMove can throw if window state is changing or mouse is not pressed
+                // Silently ignore these cases
+            }
+        }
+    }
+    
+    private void Minimize_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+    
+    private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+            if (MaximizeRestoreButton != null)
+            {
+                MaximizeRestoreButton.Content = "🗖";
+            }
+        }
+        else
+        {
+            WindowState = WindowState.Maximized;
+            if (MaximizeRestoreButton != null)
+            {
+                MaximizeRestoreButton.Content = "🗗";
+            }
+        }
+    }
+    
+    private void Close_Click(object sender, RoutedEventArgs e)
     {
         Close();
     }

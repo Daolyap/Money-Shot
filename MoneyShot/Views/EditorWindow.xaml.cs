@@ -79,7 +79,8 @@ public partial class EditorWindow : Window
         KeyDown += EditorWindow_KeyDown;
         
         // Add mouse wheel event handler for Ctrl + scroll zoom
-        MouseWheel += EditorWindow_MouseWheel;
+        // Use PreviewMouseWheel to catch before ScrollViewer
+        PreviewMouseWheel += EditorWindow_MouseWheel;
     }
     
     private void EditorWindow_KeyDown(object sender, KeyEventArgs e)
@@ -120,8 +121,8 @@ public partial class EditorWindow : Window
                     e.Handled = true;
                     break;
                 case Key.Escape:
-                    _currentTool = AnnotationTool.Cursor;
-                    ClearSelection();
+                    // Close the editor window and cancel the screenshot
+                    Close();
                     e.Handled = true;
                     break;
                 case Key.Delete:
@@ -1324,13 +1325,87 @@ public partial class EditorWindow : Window
 
     private BitmapSource CaptureCanvasAsImage()
     {
+        // Get the actual image dimensions (not the canvas display size)
+        var imageWidth = (int)_originalImage.PixelWidth;
+        var imageHeight = (int)_originalImage.PixelHeight;
+        
+        // Temporarily remove zoom transform for rendering
+        var originalScaleX = ZoomTransform.ScaleX;
+        var originalScaleY = ZoomTransform.ScaleY;
+        ZoomTransform.ScaleX = 1;
+        ZoomTransform.ScaleY = 1;
+        
+        // Force layout update to ensure proper rendering
+        ImageCanvas.Measure(new Size(imageWidth, imageHeight));
+        ImageCanvas.Arrange(new Rect(0, 0, imageWidth, imageHeight));
+        ImageCanvas.UpdateLayout();
+        
         var renderBitmap = new RenderTargetBitmap(
-            (int)ImageCanvas.ActualWidth,
-            (int)ImageCanvas.ActualHeight,
+            imageWidth,
+            imageHeight,
             96, 96,
             PixelFormats.Pbgra32);
 
         renderBitmap.Render(ImageCanvas);
+        
+        // Restore zoom transform
+        ZoomTransform.ScaleX = originalScaleX;
+        ZoomTransform.ScaleY = originalScaleY;
+        
+        // Force layout update again to restore zoom
+        ImageCanvas.UpdateLayout();
+        
         return renderBitmap;
+    }
+    
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            // Double-click to maximize/restore
+            MaximizeRestore_Click(sender, e);
+        }
+        else if (e.ClickCount == 1)
+        {
+            try
+            {
+                DragMove();
+            }
+            catch (InvalidOperationException)
+            {
+                // DragMove can throw if window state is changing or mouse is not pressed
+                // Silently ignore these cases
+            }
+        }
+    }
+    
+    private void Minimize_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+    
+    private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+            if (MaximizeRestoreButton != null)
+            {
+                MaximizeRestoreButton.Content = "🗖";
+            }
+        }
+        else
+        {
+            WindowState = WindowState.Maximized;
+            if (MaximizeRestoreButton != null)
+            {
+                MaximizeRestoreButton.Content = "🗗";
+            }
+        }
+    }
+    
+    private void Close_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
     }
 }

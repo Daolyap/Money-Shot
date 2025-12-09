@@ -5,66 +5,193 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:MoneyShot"
         mc:Ignorable="d"
-        Title="Money Shot - Screenshot Tool" Height="500" Width="700"
-        MinHeight="400" MinWidth="500"
+        Title="Money Shot - Screenshot Tool" Height="600" Width="750"
+        MinHeight="500" MinWidth="650"
         WindowStartupLocation="CenterScreen"
-        Background="#2D2D30"
+        Background="Transparent"
+        AllowsTransparency="True"
+        WindowStyle="None"
+        ResizeMode="CanResize"
         StateChanged="Window_StateChanged"
         Closing="Window_Closing">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-        <Grid Margin="20">
+    <Window.Resources>
+        <!-- Glassmorphism Button Style -->
+        <Style x:Key="GlassButton" TargetType="Button">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="#40FFFFFF" Opacity="0.15"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush">
+                <Setter.Value>
+                    <SolidColorBrush Color="#80FFFFFF" Opacity="0.3"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="Black" Direction="270" ShadowDepth="2" Opacity="0.3" BlurRadius="8"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <SolidColorBrush Color="#60FFFFFF" Opacity="0.25"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <SolidColorBrush Color="#80FFFFFF" Opacity="0.35"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Primary Action Button Style -->
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource GlassButton}">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#0E639C" Offset="0"/>
+                        <GradientStop Color="#1177BB" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Padding" Value="20,15"/>
+        </Style>
+    </Window.Resources>
+    
+    <Border CornerRadius="12" BorderThickness="1">
+        <Border.BorderBrush>
+            <SolidColorBrush Color="White" Opacity="0.2"/>
+        </Border.BorderBrush>
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1" Opacity="0.95">
+                <GradientStop Color="#1a1a2e" Offset="0"/>
+                <GradientStop Color="#16213e" Offset="0.5"/>
+                <GradientStop Color="#0f3460" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.Background>
+        <Border.Effect>
+            <DropShadowEffect Color="Black" Direction="270" ShadowDepth="10" Opacity="0.5" BlurRadius="30"/>
+        </Border.Effect>
+        
+        <Grid Margin="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Header -->
-            <StackPanel Grid.Row="0" Margin="0,0,0,30">
-                <TextBlock Text="💰 Money Shot" FontSize="36" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
-                <TextBlock Text="Modern Screenshot Tool for Windows 11+" FontSize="14" Foreground="#AAAAAA" HorizontalAlignment="Center" Margin="0,5,0,0"/>
-            </StackPanel>
+            <!-- Window Title Bar -->
+            <Border Grid.Row="0" Background="#20FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="0,0,0,1" 
+                    CornerRadius="12,12,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid Height="35">
+                    <TextBlock Text="💰 Money Shot - Screenshot Tool" 
+                               Foreground="White" 
+                               FontSize="14" 
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" 
+                               Margin="15,0,0,0"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,5,0">
+                        <Button Content="🗕" Click="Minimize_Click" Style="{StaticResource GlassButton}" 
+                                Width="40" Height="28" Padding="0" Margin="2,0"/>
+                        <Button Content="🗖" Name="MaximizeRestoreButton" Click="MaximizeRestore_Click" Style="{StaticResource GlassButton}" 
+                                Width="40" Height="28" Padding="0" Margin="2,0"/>
+                        <Button Content="🗙" Click="Close_Click" Style="{StaticResource GlassButton}" 
+                                Width="40" Height="28" Padding="0" Margin="2,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
 
             <!-- Main Content -->
-            <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
-                <!-- Capture Options -->
-                <Border Background="#3E3E42" CornerRadius="8" Padding="30" Margin="0,0,0,20" MaxWidth="600">
-                    <StackPanel>
-                        <TextBlock Text="Capture Options" FontSize="20" FontWeight="Bold" Foreground="White" Margin="0,0,0,20" HorizontalAlignment="Center"/>
-                        
-                        <Button Name="CaptureFullScreenButton" Content="📸 Capture Full Screen" Click="CaptureFullScreen_Click" 
-                                Padding="20,15" Margin="0,5" FontSize="16" Background="#0E639C" Foreground="White" BorderBrush="#1177BB" Cursor="Hand" MinWidth="250">
-                            <Button.ToolTip>
-                                <ToolTip Content="Capture all screens (Hotkey: Print Screen)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        
-                        <Button Name="CaptureRegionButton" Content="✂️ Capture Region" Click="CaptureRegion_Click" 
-                                Padding="20,15" Margin="0,5" FontSize="16" Background="#0E639C" Foreground="White" BorderBrush="#1177BB" Cursor="Hand" MinWidth="250">
-                            <Button.ToolTip>
-                                <ToolTip Content="Select a region to capture (Hotkey: Ctrl+Print Screen)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        
-                        <!-- Individual Monitor Captures (populated dynamically) -->
-                        <StackPanel Name="MonitorButtonsPanel" Margin="0,10,0,0"/>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                <ScrollViewer.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1" Opacity="0.3">
+                        <GradientStop Color="#0a0a0a" Offset="0"/>
+                        <GradientStop Color="#1a1a1a" Offset="1"/>
+                    </LinearGradientBrush>
+                </ScrollViewer.Background>
+                <Grid Margin="30,20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,30">
+                        <TextBlock Text="💰 Money Shot" FontSize="36" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Modern Screenshot Tool for Windows 11+" FontSize="14" Foreground="#AAAAAA" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                     </StackPanel>
-                </Border>
 
-                <!-- Quick Actions -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Button Content="⚙️ Settings" Click="Settings_Click" Padding="15,10" Margin="5" Background="#3E3E42" Foreground="White" BorderBrush="#555" Cursor="Hand"/>
-                    <Button Content="ℹ️ About" Click="About_Click" Padding="15,10" Margin="5" Background="#3E3E42" Foreground="White" BorderBrush="#555" Cursor="Hand"/>
-                </StackPanel>
-            </StackPanel>
+                    <!-- Capture Options -->
+                    <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Border Background="#15FFFFFF" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="12" Padding="30" Margin="0,0,0,20" MaxWidth="600">
+                            <Border.Effect>
+                                <DropShadowEffect Color="Black" Direction="270" ShadowDepth="3" Opacity="0.4" BlurRadius="15"/>
+                            </Border.Effect>
+                            <StackPanel>
+                                <TextBlock Text="Capture Options" FontSize="20" FontWeight="Bold" Foreground="White" Margin="0,0,0,20" HorizontalAlignment="Center"/>
+                                
+                                <Button Name="CaptureFullScreenButton" Content="📸 Capture Full Screen" Click="CaptureFullScreen_Click" 
+                                        Style="{StaticResource PrimaryButton}" Margin="0,5" MinWidth="300">
+                                    <Button.ToolTip>
+                                        <ToolTip Content="Capture all screens (Hotkey: Print Screen)"/>
+                                    </Button.ToolTip>
+                                </Button>
+                                
+                                <Button Name="CaptureRegionButton" Content="✂️ Capture Region" Click="CaptureRegion_Click" 
+                                        Style="{StaticResource PrimaryButton}" Margin="0,5" MinWidth="300">
+                                    <Button.ToolTip>
+                                        <ToolTip Content="Select a region to capture (Hotkey: Ctrl+Print Screen)"/>
+                                    </Button.ToolTip>
+                                </Button>
+                                
+                                <!-- Individual Monitor Captures (populated dynamically) -->
+                                <StackPanel Name="MonitorButtonsPanel" Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </Border>
 
-            <!-- Footer -->
-            <StackPanel Grid.Row="2" Margin="0,20,0,0">
-                <TextBlock Text="Tip: Hotkeys are customizable in Settings" 
-                           FontSize="12" Foreground="#888888" HorizontalAlignment="Center" TextWrapping="Wrap"/>
-                <TextBlock Text="The app will minimize to system tray when closed" 
-                           FontSize="12" Foreground="#888888" HorizontalAlignment="Center" Margin="0,5,0,0" TextWrapping="Wrap"/>
-            </StackPanel>
+                        <!-- Quick Actions -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Content="⚙️ Settings" Click="Settings_Click" Style="{StaticResource GlassButton}" Padding="15,10" Margin="5"/>
+                            <Button Content="ℹ️ About" Click="About_Click" Style="{StaticResource GlassButton}" Padding="15,10" Margin="5"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Footer -->
+                    <StackPanel Grid.Row="2" Margin="0,20,0,10">
+                        <TextBlock Text="Tip: Hotkeys are customizable in Settings" 
+                                   FontSize="12" Foreground="#888888" HorizontalAlignment="Center" TextWrapping="Wrap"/>
+                        <TextBlock Text="The app will minimize to system tray when closed" 
+                                   FontSize="12" Foreground="#888888" HorizontalAlignment="Center" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
         </Grid>
-    </ScrollViewer>
+    </Border>
 </Window>

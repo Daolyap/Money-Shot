@@ -3,160 +3,318 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Money Shot - Editor" Height="800" Width="1200"
         MinHeight="600" MinWidth="800"
-        WindowStartupLocation="CenterScreen">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        AllowsTransparency="True"
+        WindowStyle="None"
+        ResizeMode="CanResize">
+    <Window.Resources>
+        <!-- Glassmorphism Button Style -->
+        <Style x:Key="GlassButton" TargetType="Button">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="#40FFFFFF" Opacity="0.15"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush">
+                <Setter.Value>
+                    <SolidColorBrush Color="#80FFFFFF" Opacity="0.3"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="Black" Direction="270" ShadowDepth="2" Opacity="0.3" BlurRadius="8"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <SolidColorBrush Color="#60FFFFFF" Opacity="0.25"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <SolidColorBrush Color="#80FFFFFF" Opacity="0.35"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
 
-        <!-- Toolbar -->
-        <Border Grid.Row="0" Background="#2D2D30" Padding="10">
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <!-- Tool Selection -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,10,0">
-                        <Button Content="↖️ Cursor" Tag="Cursor" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Cursor Tool - Select and move elements"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="✂️ Crop" Tag="Crop" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Crop Tool"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="✏️ Rectangle (R)" Tag="Rectangle" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Rectangle Tool (Shortcut: R)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="⭕ Circle (C)" Tag="Circle" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Circle Tool (Shortcut: C)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="➡️ Arrow (A)" Tag="Arrow" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Arrow Tool (Shortcut: A)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="📏 Line (L)" Tag="Line" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Line Tool (Shortcut: L)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="🔢 Number (1)" Tag="Number" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Number Tool (Shortcut: 1)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="📝 Text (T)" Tag="Text" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Text Tool (Shortcut: T)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="⬛ Pixelate (P)" Tag="Blur" Click="ToolButton_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Pixelate Tool (Shortcut: P) - Obscure sensitive info"/>
-                            </Button.ToolTip>
-                        </Button>
-                    </StackPanel>
+        <!-- Primary Action Button Style -->
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource GlassButton}">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#0E639C" Offset="0"/>
+                        <GradientStop Color="#1177BB" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                    <!-- Color Selection -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,10,0">
-                        <Button Width="30" Height="30" Background="Red" Click="ColorButton_Click" Margin="2">
-                            <Button.ToolTip>
-                                <ToolTip Content="Red"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Width="30" Height="30" Background="Blue" Click="ColorButton_Click" Margin="2">
-                            <Button.ToolTip>
-                                <ToolTip Content="Blue"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Width="30" Height="30" Background="Green" Click="ColorButton_Click" Margin="2">
-                            <Button.ToolTip>
-                                <ToolTip Content="Green"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Width="30" Height="30" Background="Yellow" Click="ColorButton_Click" Margin="2">
-                            <Button.ToolTip>
-                                <ToolTip Content="Yellow"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Width="30" Height="30" Background="Orange" Click="ColorButton_Click" Margin="2">
-                            <Button.ToolTip>
-                                <ToolTip Content="Orange"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Width="30" Height="30" Background="Purple" Click="ColorButton_Click" Margin="2">
-                            <Button.ToolTip>
-                                <ToolTip Content="Purple"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Width="30" Height="30" Background="Black" Click="ColorButton_Click" Margin="2">
-                            <Button.ToolTip>
-                                <ToolTip Content="Black"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Width="30" Height="30" Background="White" Click="ColorButton_Click" Margin="2">
-                            <Button.ToolTip>
-                                <ToolTip Content="White"/>
-                            </Button.ToolTip>
-                        </Button>
-                    </StackPanel>
+        <!-- Color Button Style -->
+        <Style x:Key="ColorButton" TargetType="Button">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush">
+                <Setter.Value>
+                    <SolidColorBrush Color="White" Opacity="0.3"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="Black" Direction="270" ShadowDepth="1" Opacity="0.5" BlurRadius="6"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="15"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="White"/>
+                    <Setter Property="BorderThickness" Value="3"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    
+    <Border CornerRadius="12" BorderThickness="1">
+        <Border.BorderBrush>
+            <SolidColorBrush Color="White" Opacity="0.2"/>
+        </Border.BorderBrush>
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1" Opacity="0.95">
+                <GradientStop Color="#1a1a2e" Offset="0"/>
+                <GradientStop Color="#16213e" Offset="0.5"/>
+                <GradientStop Color="#0f3460" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.Background>
+        <Border.Effect>
+            <DropShadowEffect Color="Black" Direction="270" ShadowDepth="10" Opacity="0.5" BlurRadius="30"/>
+        </Border.Effect>
+        
+        <Grid Margin="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-                    <!-- Actions -->
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="↶ Undo (Ctrl+Z)" Click="Undo_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Undo (Ctrl+Z)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="🔍+ Zoom" Click="ZoomIn_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Zoom In (Ctrl++)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="🔍- Zoom" Click="ZoomOut_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Zoom Out (Ctrl+-)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="🔍 Reset" Click="ZoomReset_Click" Margin="2" Padding="8,5" Background="#3E3E42" Foreground="White" BorderBrush="#555">
-                            <Button.ToolTip>
-                                <ToolTip Content="Reset Zoom (Ctrl+0)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="💾 Save (Ctrl+S)" Click="Save_Click" Margin="2" Padding="8,5" Background="#0E639C" Foreground="White" BorderBrush="#1177BB">
-                            <Button.ToolTip>
-                                <ToolTip Content="Save (Ctrl+S)"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button Content="📋 Copy (Ctrl+C)" Click="SaveToClipboard_Click" Margin="2" Padding="8,5" Background="#0E639C" Foreground="White" BorderBrush="#1177BB">
-                            <Button.ToolTip>
-                                <ToolTip Content="Copy to Clipboard (Ctrl+C)"/>
-                            </Button.ToolTip>
-                        </Button>
+            <!-- Window Title Bar -->
+            <Border Grid.Row="0" Background="#20FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="0,0,0,1" 
+                    CornerRadius="12,12,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid Height="35">
+                    <TextBlock Text="💰 Money Shot - Editor" 
+                               Foreground="White" 
+                               FontSize="14" 
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" 
+                               Margin="15,0,0,0"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,5,0">
+                        <Button Content="🗕" Click="Minimize_Click" Style="{StaticResource GlassButton}" 
+                                Width="40" Height="28" Padding="0" Margin="2,0"/>
+                        <Button Content="🗖" Name="MaximizeRestoreButton" Click="MaximizeRestore_Click" Style="{StaticResource GlassButton}" 
+                                Width="40" Height="28" Padding="0" Margin="2,0"/>
+                        <Button Content="🗙" Click="Close_Click" Style="{StaticResource GlassButton}" 
+                                Width="40" Height="28" Padding="0" Margin="2,0"/>
                     </StackPanel>
-                </WrapPanel>
+                </Grid>
+            </Border>
+
+            <!-- Toolbar with Glassmorphism -->
+            <Border Grid.Row="1" Padding="10" Background="#15FFFFFF" BorderBrush="#25FFFFFF" BorderThickness="0,0,0,1">
+                <Border.Effect>
+                    <BlurEffect Radius="0"/>
+                </Border.Effect>
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <!-- Tool Selection -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,15,0">
+                            <Button Content="↖️ Cursor" Tag="Cursor" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Cursor Tool - Select and move elements"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="✂️ Crop" Tag="Crop" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Crop Tool"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="✏️ Rectangle (R)" Tag="Rectangle" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Rectangle Tool (Shortcut: R)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="⭕ Circle (C)" Tag="Circle" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Circle Tool (Shortcut: C)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="➡️ Arrow (A)" Tag="Arrow" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Arrow Tool (Shortcut: A)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="📏 Line (L)" Tag="Line" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Line Tool (Shortcut: L)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="🔢 Number (1)" Tag="Number" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Number Tool (Shortcut: 1)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="📝 Text (T)" Tag="Text" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Text Tool (Shortcut: T)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="⬛ Pixelate (P)" Tag="Blur" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Pixelate Tool (Shortcut: P) - Obscure sensitive info"/>
+                                </Button.ToolTip>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Color Selection -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,15,0">
+                            <Button Background="Red" Click="ColorButton_Click" Style="{StaticResource ColorButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Red"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Background="Blue" Click="ColorButton_Click" Style="{StaticResource ColorButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Blue"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Background="Green" Click="ColorButton_Click" Style="{StaticResource ColorButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Green"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Background="Yellow" Click="ColorButton_Click" Style="{StaticResource ColorButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Yellow"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Background="Orange" Click="ColorButton_Click" Style="{StaticResource ColorButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Orange"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Background="Purple" Click="ColorButton_Click" Style="{StaticResource ColorButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Purple"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Background="Black" Click="ColorButton_Click" Style="{StaticResource ColorButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Black"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Background="White" Click="ColorButton_Click" Style="{StaticResource ColorButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="White"/>
+                                </Button.ToolTip>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Actions -->
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="↶ Undo (Ctrl+Z)" Click="Undo_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Undo (Ctrl+Z)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="🔍+ Zoom" Click="ZoomIn_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Zoom In (Ctrl++)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="🔍- Zoom" Click="ZoomOut_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Zoom Out (Ctrl+-)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="🔍 Reset" Click="ZoomReset_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Reset Zoom (Ctrl+0)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="💾 Save (Ctrl+S)" Click="Save_Click" Style="{StaticResource PrimaryButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Save (Ctrl+S)"/>
+                                </Button.ToolTip>
+                            </Button>
+                            <Button Content="📋 Copy (Ctrl+C)" Click="SaveToClipboard_Click" Style="{StaticResource PrimaryButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Copy to Clipboard (Ctrl+C)"/>
+                                </Button.ToolTip>
+                            </Button>
+                        </StackPanel>
+                    </WrapPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Main Canvas Area -->
+            <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1" Opacity="0.3">
+                        <GradientStop Color="#0a0a0a" Offset="0"/>
+                        <GradientStop Color="#1a1a1a" Offset="1"/>
+                    </LinearGradientBrush>
+                </ScrollViewer.Background>
+                <Grid Name="ImageCanvas" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid.RenderTransform>
+                        <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1" CenterX="0" CenterY="0"/>
+                    </Grid.RenderTransform>
+                    <Grid.Effect>
+                        <DropShadowEffect Color="Black" Direction="270" ShadowDepth="5" Opacity="0.7" BlurRadius="20"/>
+                    </Grid.Effect>
+                    <Image Name="ImageDisplay"/>
+                    <Canvas Name="DrawingCanvas" 
+                            MouseDown="Canvas_MouseDown"
+                            MouseMove="Canvas_MouseMove"
+                            MouseUp="Canvas_MouseUp"
+                            Background="Transparent"/>
+                </Grid>
             </ScrollViewer>
-        </Border>
-
-        <!-- Main Canvas Area -->
-        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#1E1E1E">
-            <Grid Name="ImageCanvas" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Grid.RenderTransform>
-                    <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1" CenterX="0" CenterY="0"/>
-                </Grid.RenderTransform>
-                <Image Name="ImageDisplay"/>
-                <Canvas Name="DrawingCanvas" 
-                        MouseDown="Canvas_MouseDown"
-                        MouseMove="Canvas_MouseMove"
-                        MouseUp="Canvas_MouseUp"
-                        Background="Transparent"/>
-            </Grid>
-        </ScrollViewer>
-    </Grid>
+        </Grid>
+    </Border>
 </Window>

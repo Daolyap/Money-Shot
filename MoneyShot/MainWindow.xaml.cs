@@ -109,12 +109,12 @@ public partial class MainWindow : Window
             Dispatcher.Invoke(CaptureRegion);
         });
         
-        // Register PrintScreen + Number hotkeys for individual monitors
+        // Register Ctrl+Shift+Number hotkeys for individual monitors (PrintScreen+Number not supported by Windows API)
         var screens = _screenshotService.GetAllScreens();
         for (int i = 0; i < Math.Min(screens.Count, MaxMonitorHotkeys); i++)
         {
             var monitorIndex = i;
-            var hotkey = $"PrintScreen+{i + 1}";
+            var hotkey = $"Ctrl+Shift+{i + 1}";
             _hotKeyService.RegisterHotKeyFromString(hotkey, () =>
             {
                 Dispatcher.Invoke(() => CaptureMonitor(monitorIndex));
@@ -218,14 +218,17 @@ public partial class MainWindow : Window
     {
         try
         {
+            // Capture the screen BEFORE hiding the window to get a frozen snapshot
+            var frozenScreen = _screenshotService.CaptureFullScreen();
+            
             Hide();
             System.Threading.Thread.Sleep(200);
 
-            var regionSelector = new RegionSelector();
-            if (regionSelector.ShowDialog() == true && regionSelector.SelectedRegion != null)
+            var regionSelector = new RegionSelector(frozenScreen);
+            if (regionSelector.ShowDialog() == true && regionSelector.CroppedScreenshot != null)
             {
-                var screenshot = _screenshotService.CaptureRegion(regionSelector.SelectedRegion.Value);
-                OpenEditor(screenshot);
+                // Use the cropped screenshot from the frozen screen, not a new capture
+                OpenEditor(regionSelector.CroppedScreenshot);
             }
             else
             {
@@ -319,6 +322,9 @@ public partial class MainWindow : Window
     private void About_Click(object sender, RoutedEventArgs e)
     {
         var settings = _settingsService.LoadSettings();
+        var screens = _screenshotService.GetAllScreens();
+        var monitorHotkeys = screens.Count > 1 ? $"\n• Ctrl+Shift+1-{Math.Min(screens.Count, MaxMonitorHotkeys)} - Capture individual monitors" : "";
+        
         System.Windows.MessageBox.Show(
             "Money Shot - Modern Screenshot Tool\n\n" +
             "Version 2.0.0\n\n" +
@@ -333,7 +339,8 @@ public partial class MainWindow : Window
             "• Start in tray option\n\n" +
             "Current Hotkeys:\n" +
             $"• {settings.HotKeyCapture} - Capture full screen\n" +
-            $"• {settings.HotKeyRegionCapture} - Capture region",
+            $"• {settings.HotKeyRegionCapture} - Capture region" +
+            monitorHotkeys,
             "About Money Shot",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -361,5 +368,56 @@ public partial class MainWindow : Window
         {
             ExitApplication();
         }
+    }
+    
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            // Double-click to maximize/restore
+            MaximizeRestore_Click(sender, e);
+        }
+        else if (e.ClickCount == 1)
+        {
+            try
+            {
+                DragMove();
+            }
+            catch (InvalidOperationException)
+            {
+                // DragMove can throw if window state is changing or mouse is not pressed
+                // Silently ignore these cases
+            }
+        }
+    }
+    
+    private void Minimize_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+    
+    private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+            if (MaximizeRestoreButton != null)
+            {
+                MaximizeRestoreButton.Content = "🗖";
+            }
+        }
+        else
+        {
+            WindowState = WindowState.Maximized;
+            if (MaximizeRestoreButton != null)
+            {
+                MaximizeRestoreButton.Content = "🗗";
+            }
+        }
+    }
+    
+    private void Close_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
     }
 }

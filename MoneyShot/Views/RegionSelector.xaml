@@ -6,5 +6,8 @@
         MouseMove="Window_MouseMove"
         MouseUp="Window_MouseUp"
         KeyDown="Window_KeyDown">
-    <Canvas Name="SelectionCanvas"/>
+    <Grid>
+        <Image Name="BackgroundImage" Stretch="Fill"/>
+        <Canvas Name="SelectionCanvas"/>
+    </Grid>
 </Window>
