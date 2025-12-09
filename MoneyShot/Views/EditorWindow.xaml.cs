@@ -1324,13 +1324,36 @@ public partial class EditorWindow : Window
 
     private BitmapSource CaptureCanvasAsImage()
     {
+        // Get the actual image dimensions (not the canvas display size)
+        var imageWidth = (int)_originalImage.PixelWidth;
+        var imageHeight = (int)_originalImage.PixelHeight;
+        
+        // Temporarily remove zoom transform for rendering
+        var originalScaleX = ZoomTransform.ScaleX;
+        var originalScaleY = ZoomTransform.ScaleY;
+        ZoomTransform.ScaleX = 1;
+        ZoomTransform.ScaleY = 1;
+        
+        // Force layout update to ensure proper rendering
+        ImageCanvas.Measure(new Size(imageWidth, imageHeight));
+        ImageCanvas.Arrange(new Rect(0, 0, imageWidth, imageHeight));
+        ImageCanvas.UpdateLayout();
+        
         var renderBitmap = new RenderTargetBitmap(
-            (int)ImageCanvas.ActualWidth,
-            (int)ImageCanvas.ActualHeight,
+            imageWidth,
+            imageHeight,
             96, 96,
             PixelFormats.Pbgra32);
 
         renderBitmap.Render(ImageCanvas);
+        
+        // Restore zoom transform
+        ZoomTransform.ScaleX = originalScaleX;
+        ZoomTransform.ScaleY = originalScaleY;
+        
+        // Force layout update again to restore zoom
+        ImageCanvas.UpdateLayout();
+        
         return renderBitmap;
     }
 }

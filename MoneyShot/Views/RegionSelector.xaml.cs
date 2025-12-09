@@ -2,7 +2,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using MoneyShot.Services;
 using DrawingRectangle = System.Drawing.Rectangle;
 
 namespace MoneyShot.Views;
@@ -14,12 +16,14 @@ public partial class RegionSelector : Window
     private bool _isSelecting;
     private int _virtualScreenLeft;
     private int _virtualScreenTop;
+    private readonly ScreenshotService _screenshotService;
 
     public DrawingRectangle? SelectedRegion { get; private set; }
 
     public RegionSelector()
     {
         InitializeComponent();
+        _screenshotService = new ScreenshotService();
         SetupFullScreenOverlay();
     }
 
@@ -54,11 +58,38 @@ public partial class RegionSelector : Window
         Width = maxX - minX;
         Height = maxY - minY;
         
-        Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0));
         Cursor = Cursors.Cross;
         
         // Show immediately to prevent black screen
         ShowInTaskbar = false;
+        
+        // Capture and display the frozen screen in the background
+        CaptureAndDisplayFrozenScreen();
+    }
+    
+    private void CaptureAndDisplayFrozenScreen()
+    {
+        try
+        {
+            // Capture the full screen before showing the overlay
+            var screenshot = _screenshotService.CaptureFullScreen();
+            
+            // Set the frozen screenshot as the background
+            if (BackgroundImage != null)
+            {
+                BackgroundImage.Source = screenshot;
+                BackgroundImage.Stretch = Stretch.Fill;
+            }
+            
+            // Add semi-transparent overlay on top
+            Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error capturing frozen screen: {ex.Message}");
+            // Fallback to just the overlay without frozen background
+            Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0));
+        }
     }
 
     private void Window_MouseDown(object sender, MouseButtonEventArgs e)
