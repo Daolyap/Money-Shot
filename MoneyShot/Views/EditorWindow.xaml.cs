@@ -60,6 +60,8 @@ public partial class EditorWindow : Window
         Right
     }
     
+    private const int FreehandMinDistance = 2; // Minimum pixel distance between points
+    
     // Crop fields
     private Rectangle? _cropRectangle;
     private bool _isCropping;
@@ -756,13 +758,13 @@ public partial class EditorWindow : Window
 
     private void UpdatePolyline(Point currentPoint)
     {
-        if (_currentPolyline != null)
+        if (_currentPolyline != null && _currentPolyline.Points.Count > 0)
         {
             // Add point if it's far enough from the last point to avoid too many points
             var lastPoint = _currentPolyline.Points[_currentPolyline.Points.Count - 1];
             var distance = Math.Sqrt(Math.Pow(currentPoint.X - lastPoint.X, 2) + Math.Pow(currentPoint.Y - lastPoint.Y, 2));
             
-            if (distance > 2) // Minimum distance threshold
+            if (distance > FreehandMinDistance) // Minimum distance threshold
             {
                 _currentPolyline.Points.Add(currentPoint);
             }

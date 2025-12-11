@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Input;
 using MoneyShot.Models;
@@ -28,7 +29,7 @@ public partial class SettingsWindow : Window
         
         if (screens.Count > 1)
         {
-            var hotkeys = new System.Text.StringBuilder();
+            var hotkeys = new StringBuilder();
             for (int i = 0; i < Math.Min(screens.Count, 9); i++)
             {
                 if (i > 0) hotkeys.Append(", ");
