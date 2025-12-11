@@ -126,24 +126,45 @@ The project includes automated CI/CD workflows:
      - Both MSI and ZIP artifacts attached
      - Generated release notes
    - Marked as pre-release for development builds
+   - **Versioning**: Build number is synchronized across all artifacts:
+     - Assembly version: `{version}.{build_number}` (e.g., `1.0.0.123`)
+     - File version: `{version}.{build_number}`
+     - MSI version: `{version}.{build_number}`
 
 2. **Build** (`.github/workflows/build.yml`)
    - Runs on pull requests for validation
    - Creates build artifacts for review
    - Ensures code builds successfully before merge
+   - Uses build number for version synchronization
 
 3. **Build MSI Installer** (`.github/workflows/build-msi.yml`)
    - Runs on pull requests for validation
    - Tests MSI installer creation
    - Can be manually triggered via workflow_dispatch
+   - Uses build number for MSI version
 
 ### Release Process
 
 Releases are fully automated:
 - Every merge to main/master triggers a new release
 - Version is extracted from `MoneyShot/MoneyShot.csproj`
+- Build number from `GITHUB_RUN_NUMBER` is appended to assembly and file versions
+- MSI installer version matches the executable version
 - Build artifacts are automatically uploaded to GitHub Releases
 - Users can download the latest build from the Releases page
+
+### Version Synchronization
+
+To ensure consistency, the build number is synchronized across:
+- **Git Tag**: `v1.0.0-build.123.abc1234`
+- **Assembly Version**: `1.0.0.123`
+- **File Version**: `1.0.0.123`
+- **MSI Version**: `1.0.0.123`
+
+This is achieved by:
+1. Extracting the base version from `MoneyShot.csproj`
+2. Passing `/p:AssemblyVersion` and `/p:FileVersion` to `dotnet build`
+3. Passing `-d ProductVersion` to the WiX toolset during MSI creation
 
 ## Adding New Features
 

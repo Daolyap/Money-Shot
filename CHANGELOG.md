@@ -5,6 +5,15 @@ All notable changes to Money Shot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Build Process**
+  - Synchronized build numbers across all release artifacts
+  - Assembly version, file version, and MSI version now include build number (e.g., `1.0.0.123`)
+  - Build number from GitHub Actions CI/CD is now reflected in compiled software
+  - Users can now identify which build they're running from file properties
+
 ## [1.0.0] - 2025-12-05
 
 ### Initial Release 🎉
