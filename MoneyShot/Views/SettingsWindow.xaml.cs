@@ -18,6 +18,28 @@ public partial class SettingsWindow : Window
         _settingsService = new SettingsService();
         _settings = _settingsService.LoadSettings();
         LoadSettings();
+        LoadMonitorHotkeysInfo();
+    }
+
+    private void LoadMonitorHotkeysInfo()
+    {
+        var screenshotService = new ScreenshotService();
+        var screens = screenshotService.GetAllScreens();
+        
+        if (screens.Count > 1)
+        {
+            var hotkeys = new System.Text.StringBuilder();
+            for (int i = 0; i < Math.Min(screens.Count, 9); i++)
+            {
+                if (i > 0) hotkeys.Append(", ");
+                hotkeys.Append($"Ctrl+Shift+{i + 1}");
+            }
+            MonitorHotkeysInfo.Text = $"Detected {screens.Count} monitor(s). Hotkeys: {hotkeys}";
+        }
+        else
+        {
+            MonitorHotkeysInfo.Text = "Only one monitor detected. Individual monitor hotkeys are not available.";
+        }
     }
 
     private void LoadSettings()

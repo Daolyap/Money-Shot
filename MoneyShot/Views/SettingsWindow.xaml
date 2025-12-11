@@ -298,6 +298,11 @@
                                     <ComboBoxItem Content="F6" Foreground="White"/>
                                     <ComboBoxItem Content="Ctrl+F6" Foreground="White"/>
                                 </ComboBox>
+                                
+                                <TextBlock Text="Individual Monitor Capture:" Foreground="White" Margin="0,15,0,2" FontWeight="Bold"/>
+                                <TextBlock Name="MonitorHotkeysInfo" Foreground="#AAAAAA" Margin="0,0,0,2" TextWrapping="Wrap"/>
+                                <TextBlock Text="(Individual monitor hotkeys are fixed and cannot be customized)" 
+                                           Foreground="#888888" FontSize="10" FontStyle="Italic" Margin="0,2,0,0"/>
                             </StackPanel>
                         </Border>
 

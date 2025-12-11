@@ -5,12 +5,29 @@ All notable changes to Money Shot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2025-12-11
 
+### Added
+- **Freehand Drawing Tool**: Draw free-form annotations with smooth polyline rendering
+  - Accessible via ✍️ button or F keyboard shortcut
+  - Supports all color options and line thickness
+- **Individual Monitor Hotkeys**: Capture specific monitors with Ctrl+Shift+1-9
+  - Automatically registers hotkeys for up to 9 monitors
+  - Works alongside full screen and region capture
+- **Enhanced Hotkey Settings**: 
+  - Customizable hotkeys for full screen and region capture
+  - Display of monitor-specific hotkeys in settings UI
+  - Live hotkey reloading without application restart
+
+### Fixed
+- **Line Drawing Bug**: Fixed visual glitch where lines briefly appeared from top-left corner
+  - Lines now initialize with both start and end points at click location
+  
 ### Changed
+- **Version**: Bumped to 2.0.0 to reflect new feature additions
 - **Build Process**
   - Synchronized build numbers across all release artifacts
-  - Assembly version, file version, and MSI version now include build number (e.g., `1.0.0.123`)
+  - Assembly version, file version, and MSI version now include build number (e.g., `2.0.0.123`)
   - Build number from GitHub Actions CI/CD is now reflected in compiled software
   - Users can now identify which build they're running from file properties
 
