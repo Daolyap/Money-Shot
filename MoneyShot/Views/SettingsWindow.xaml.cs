@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Input;
 using MoneyShot.Models;
@@ -18,6 +19,28 @@ public partial class SettingsWindow : Window
         _settingsService = new SettingsService();
         _settings = _settingsService.LoadSettings();
         LoadSettings();
+        LoadMonitorHotkeysInfo();
+    }
+
+    private void LoadMonitorHotkeysInfo()
+    {
+        var screenshotService = new ScreenshotService();
+        var screens = screenshotService.GetAllScreens();
+        
+        if (screens.Count > 1)
+        {
+            var hotkeys = new StringBuilder();
+            for (int i = 0; i < Math.Min(screens.Count, 9); i++)
+            {
+                if (i > 0) hotkeys.Append(", ");
+                hotkeys.Append($"Ctrl+Shift+{i + 1}");
+            }
+            MonitorHotkeysInfo.Text = $"Detected {screens.Count} monitor(s). Hotkeys: {hotkeys}";
+        }
+        else
+        {
+            MonitorHotkeysInfo.Text = "Only one monitor detected. Individual monitor hotkeys are not available.";
+        }
     }
 
     private void LoadSettings()
@@ -25,6 +48,7 @@ public partial class SettingsWindow : Window
         StartInTrayCheckbox.IsChecked = _settings.StartInTray;
         RunOnStartupCheckbox.IsChecked = _settings.RunOnStartup;
         MinimizeToTrayCheckbox.IsChecked = _settings.MinimizeToTray;
+        CheckForUpdatesCheckbox.IsChecked = _settings.CheckForUpdatesOnStartup;
         DisableWindowsPrintScreenCheckbox.IsChecked = _settings.DisableWindowsPrintScreen;
         SavePathTextBox.Text = _settings.DefaultSavePath;
         
@@ -86,6 +110,7 @@ public partial class SettingsWindow : Window
             _settings.StartInTray = StartInTrayCheckbox.IsChecked ?? true;
             _settings.RunOnStartup = RunOnStartupCheckbox.IsChecked ?? false;
             _settings.MinimizeToTray = MinimizeToTrayCheckbox.IsChecked ?? false;
+            _settings.CheckForUpdatesOnStartup = CheckForUpdatesCheckbox.IsChecked ?? true;
             _settings.DisableWindowsPrintScreen = DisableWindowsPrintScreenCheckbox.IsChecked ?? false;
             _settings.DefaultSavePath = SavePathTextBox.Text;
 

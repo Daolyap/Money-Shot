@@ -11,10 +11,11 @@ A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive 
 
 ### Annotation Tools
 - **Shapes**: Rectangles, circles, arrows, and lines
+- **Freehand Drawing**: Draw free-form annotations
 - **Colors**: Multiple color options for all tools
 - **Text**: Add text annotations with customizable fonts
 - **Numbers**: Sequential numbering for step-by-step guides
-- **Blur Tool**: Blur sensitive information (planned)
+- **Blur Tool**: Pixelate sensitive information
 - **Undo/Redo**: Easily correct mistakes
 
 ### Save Options
@@ -25,8 +26,10 @@ A modern, feature-rich screenshot tool built for Windows 11+ with comprehensive 
 
 ### Productivity Features
 - **Global Hotkeys**:
-  - `Print Screen` - Capture full screen
-  - `Ctrl + Print Screen` - Capture region
+  - `Print Screen` - Capture full screen (customizable)
+  - `Ctrl + Print Screen` - Capture region (customizable)
+  - `Ctrl + Shift + 1-9` - Capture individual monitors
+- **Customizable Hotkeys**: Configure hotkeys in settings
 - **System Tray Integration**: Runs in background, accessible from tray
 - **Startup Integration**: Optional auto-start with Windows
 - **Modern UI**: Clean, dark-themed interface optimized for Windows 11
@@ -129,7 +132,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] MSI Installer package
 - [x] Advanced text tool with font selection
 - [x] Blur/pixelate tool
-- [ ] Freehand drawing
+- [x] Freehand drawing
+- [x] Individual monitor hotkeys (Ctrl+Shift+1-9)
+- [x] Customizable hotkeys
 - [ ] Image effects (drop shadow, borders)
 - [ ] Screenshot history
 - [ ] Quick share to cloud services

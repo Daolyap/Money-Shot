@@ -19,11 +19,35 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
+    - name: Extract version from project file
+      id: get_version
+      shell: pwsh
+      run: |
+        try {
+          [xml]$csproj = Get-Content MoneyShot/MoneyShot.csproj
+          $version = $csproj.Project.PropertyGroup.Version
+          
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Version property not found in MoneyShot.csproj"
+          }
+          
+          $buildNumber = $env:GITHUB_RUN_NUMBER
+          if ([string]::IsNullOrWhiteSpace($buildNumber)) {
+            $buildNumber = "0"
+          }
+
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "build_number=$buildNumber" >> $env:GITHUB_OUTPUT
+        } catch {
+          Write-Error "Failed to extract version: $_"
+          exit 1
+        }
+
     - name: Restore dependencies
       run: dotnet restore MoneyShot/MoneyShot.csproj
 
     - name: Build
-      run: dotnet build MoneyShot/MoneyShot.csproj --configuration Release --no-restore
+      run: dotnet build MoneyShot/MoneyShot.csproj --configuration Release --no-restore /p:AssemblyVersion=${{ steps.get_version.outputs.version }}.${{ steps.get_version.outputs.build_number }} /p:FileVersion=${{ steps.get_version.outputs.version }}.${{ steps.get_version.outputs.build_number }}
 
     - name: Publish
       run: dotnet publish MoneyShot/MoneyShot.csproj --configuration Release --output ./publish --no-build

@@ -258,6 +258,11 @@
                                 <CheckBox Name="StartInTrayCheckbox" Content="Start in system tray (only show when user requests)" Foreground="White" Margin="0,5"/>
                                 <CheckBox Name="RunOnStartupCheckbox" Content="Run on Windows startup" Foreground="White" Margin="0,5"/>
                                 <CheckBox Name="MinimizeToTrayCheckbox" Content="Minimize to system tray" Foreground="White" Margin="0,5"/>
+                                <CheckBox Name="CheckForUpdatesCheckbox" Content="Check for updates on startup" Foreground="White" Margin="0,5">
+                                    <CheckBox.ToolTip>
+                                        <ToolTip Content="Automatically check for new versions when the application starts"/>
+                                    </CheckBox.ToolTip>
+                                </CheckBox>
                                 <CheckBox Name="DisableWindowsPrintScreenCheckbox" Content="Disable Windows built-in Print Screen capture" Foreground="White" Margin="0,5">
                                     <CheckBox.ToolTip>
                                         <ToolTip Content="Disables Windows' built-in 'Use Print Screen to open screen capture' setting"/>
@@ -298,6 +303,11 @@
                                     <ComboBoxItem Content="F6" Foreground="White"/>
                                     <ComboBoxItem Content="Ctrl+F6" Foreground="White"/>
                                 </ComboBox>
+                                
+                                <TextBlock Text="Individual Monitor Capture:" Foreground="White" Margin="0,15,0,2" FontWeight="Bold"/>
+                                <TextBlock Name="MonitorHotkeysInfo" Foreground="#AAAAAA" Margin="0,0,0,2" TextWrapping="Wrap"/>
+                                <TextBlock Text="(Individual monitor hotkeys are fixed and cannot be customized)" 
+                                           Foreground="#888888" FontSize="10" FontStyle="Italic" Margin="0,2,0,0"/>
                             </StackPanel>
                         </Border>
 

@@ -57,7 +57,7 @@ jobs:
       run: dotnet restore MoneyShot/MoneyShot.csproj
 
     - name: Build
-      run: dotnet build MoneyShot/MoneyShot.csproj --configuration Release --no-restore
+      run: dotnet build MoneyShot/MoneyShot.csproj --configuration Release --no-restore /p:VersionSuffix=build.${{ github.run_number }} /p:AssemblyVersion=${{ steps.get_version.outputs.version }}.${{ github.run_number }} /p:FileVersion=${{ steps.get_version.outputs.version }}.${{ github.run_number }}
 
     - name: Publish
       run: dotnet publish MoneyShot/MoneyShot.csproj --configuration Release --output ./publish --no-build --self-contained false
@@ -79,8 +79,10 @@ jobs:
       shell: pwsh
       run: |
         $msiName = "MoneyShot-v${{ steps.get_version.outputs.version }}-build.${{ github.run_number }}.msi"
+        $msiVersion = "${{ steps.get_version.outputs.version }}.${{ github.run_number }}"
         wix build -arch x64 -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext `
           -d PublishDir="${{ github.workspace }}\publish" `
+          -d ProductVersion=$msiVersion `
           -out $msiName `
           Installer/Product.wxs
         echo "MSI_NAME=$msiName" >> $env:GITHUB_ENV
