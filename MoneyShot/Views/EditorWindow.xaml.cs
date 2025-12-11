@@ -64,6 +64,9 @@ public partial class EditorWindow : Window
     private Rectangle? _cropRectangle;
     private bool _isCropping;
     
+    // Freehand drawing fields
+    private Polyline? _currentPolyline;
+    
     // Cached pen for hit testing to avoid repeated allocations
     private static readonly Pen HitTestPen = new(Brushes.Black, 10);
 
@@ -105,6 +108,10 @@ public partial class EditorWindow : Window
                     break;
                 case Key.L:
                     _currentTool = AnnotationTool.Line;
+                    e.Handled = true;
+                    break;
+                case Key.F:
+                    _currentTool = AnnotationTool.Freehand;
                     e.Handled = true;
                     break;
                 case Key.T:
@@ -306,6 +313,7 @@ public partial class EditorWindow : Window
             AnnotationTool.Circle => CreateEllipse(),
             AnnotationTool.Arrow => CreateArrow(),
             AnnotationTool.Line => CreateLine(),
+            AnnotationTool.Freehand => CreatePolyline(),
             AnnotationTool.Number => CreateNumberLabel(),
             AnnotationTool.Text => CreateTextLabel(),
             AnnotationTool.Blur => CreateBlurRectangle(),
@@ -377,6 +385,9 @@ public partial class EditorWindow : Window
             case AnnotationTool.Arrow:
                 UpdateArrow(currentPoint);
                 break;
+            case AnnotationTool.Freehand:
+                UpdatePolyline(currentPoint);
+                break;
         }
     }
 
@@ -429,6 +440,14 @@ public partial class EditorWindow : Window
             }
             _undoStack.Push(_currentShape);
         }
+        
+        // Handle freehand polyline
+        if (_isDrawing && _currentPolyline != null)
+        {
+            _undoStack.Push(_currentPolyline);
+            _currentPolyline = null;
+        }
+        
         _isDrawing = false;
         _currentShape = null;
     }
@@ -460,7 +479,9 @@ public partial class EditorWindow : Window
             Stroke = new SolidColorBrush(_currentColor),
             StrokeThickness = _lineThickness,
             X1 = _startPoint.X,
-            Y1 = _startPoint.Y
+            Y1 = _startPoint.Y,
+            X2 = _startPoint.X,
+            Y2 = _startPoint.Y
         };
     }
 
@@ -473,6 +494,21 @@ public partial class EditorWindow : Window
             Fill = new SolidColorBrush(_currentColor)
         };
         return path;
+    }
+
+    private Polyline CreatePolyline()
+    {
+        var polyline = new Polyline
+        {
+            Stroke = new SolidColorBrush(_currentColor),
+            StrokeThickness = _lineThickness,
+            StrokeLineJoin = PenLineJoin.Round,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round
+        };
+        polyline.Points.Add(_startPoint);
+        _currentPolyline = polyline;
+        return polyline;
     }
 
     private TextBlock CreateNumberLabel()
@@ -715,6 +751,21 @@ public partial class EditorWindow : Window
         {
             line.X2 = currentPoint.X;
             line.Y2 = currentPoint.Y;
+        }
+    }
+
+    private void UpdatePolyline(Point currentPoint)
+    {
+        if (_currentPolyline != null)
+        {
+            // Add point if it's far enough from the last point to avoid too many points
+            var lastPoint = _currentPolyline.Points[_currentPolyline.Points.Count - 1];
+            var distance = Math.Sqrt(Math.Pow(currentPoint.X - lastPoint.X, 2) + Math.Pow(currentPoint.Y - lastPoint.Y, 2));
+            
+            if (distance > 2) // Minimum distance threshold
+            {
+                _currentPolyline.Points.Add(currentPoint);
+            }
         }
     }
 

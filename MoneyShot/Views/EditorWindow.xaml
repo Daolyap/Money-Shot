@@ -194,6 +194,11 @@
                                     <ToolTip Content="Line Tool (Shortcut: L)"/>
                                 </Button.ToolTip>
                             </Button>
+                            <Button Content="✍️ Freehand (F)" Tag="Freehand" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
+                                <Button.ToolTip>
+                                    <ToolTip Content="Freehand Drawing Tool (Shortcut: F)"/>
+                                </Button.ToolTip>
+                            </Button>
                             <Button Content="🔢 Number (1)" Tag="Number" Click="ToolButton_Click" Style="{StaticResource GlassButton}">
                                 <Button.ToolTip>
                                     <ToolTip Content="Number Tool (Shortcut: 1)"/>
