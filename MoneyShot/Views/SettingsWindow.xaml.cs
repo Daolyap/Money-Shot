@@ -47,6 +47,7 @@ public partial class SettingsWindow : Window
         StartInTrayCheckbox.IsChecked = _settings.StartInTray;
         RunOnStartupCheckbox.IsChecked = _settings.RunOnStartup;
         MinimizeToTrayCheckbox.IsChecked = _settings.MinimizeToTray;
+        CheckForUpdatesCheckbox.IsChecked = _settings.CheckForUpdatesOnStartup;
         DisableWindowsPrintScreenCheckbox.IsChecked = _settings.DisableWindowsPrintScreen;
         SavePathTextBox.Text = _settings.DefaultSavePath;
         
@@ -108,6 +109,7 @@ public partial class SettingsWindow : Window
             _settings.StartInTray = StartInTrayCheckbox.IsChecked ?? true;
             _settings.RunOnStartup = RunOnStartupCheckbox.IsChecked ?? false;
             _settings.MinimizeToTray = MinimizeToTrayCheckbox.IsChecked ?? false;
+            _settings.CheckForUpdatesOnStartup = CheckForUpdatesCheckbox.IsChecked ?? true;
             _settings.DisableWindowsPrintScreen = DisableWindowsPrintScreenCheckbox.IsChecked ?? false;
             _settings.DefaultSavePath = SavePathTextBox.Text;
 
