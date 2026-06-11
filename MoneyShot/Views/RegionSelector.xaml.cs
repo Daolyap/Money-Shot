@@ -46,42 +46,77 @@ public partial class RegionSelector : Window
         _virtualScreenLeft = minX;
         _virtualScreenTop = minY;
 
-        // Set window to cover all screens
+        // Set window to cover all screens. Deliberately NOT AllowsTransparency: the frozen
+        // screenshot fully covers the window, and a layered (transparent) window this size is
+        // composed in software across every monitor — visibly laggy at 4K. The dimming effect
+        // is done with the DimOverlay path instead.
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        AllowsTransparency = true; // Required for transparent overlay with WindowStyle.None
         Topmost = true;
-        
+
         // Position and size to cover entire virtual screen
         Left = minX;
         Top = minY;
         Width = maxX - minX;
         Height = maxY - minY;
-        
+
         Cursor = Cursors.Cross;
-        
+
         // Show immediately to prevent black screen
         ShowInTaskbar = false;
-        
+
         // Display the frozen screen in the background
         try
         {
-            // Set the frozen screenshot as the background
             if (BackgroundImage != null)
             {
                 BackgroundImage.Source = frozenScreen;
                 BackgroundImage.Stretch = Stretch.Fill;
             }
-            
-            // Add semi-transparent overlay on top
-            Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0));
         }
         catch (Exception ex)
         {
             MoneyShot.Services.Logger.Error("Error displaying frozen screen", ex);
-            // Fallback to just the overlay without frozen background
-            Background = new SolidColorBrush(Color.FromArgb(100, 0, 0, 0));
         }
+
+        // Dim the whole surface until a selection exists.
+        UpdateDimOverlay(null);
+    }
+
+    /// <summary>
+    /// Dims everything outside <paramref name="selection"/>. Null dims the entire surface,
+    /// which doubles as the "no selection yet" state.
+    /// </summary>
+    private void UpdateDimOverlay(Rect? selection)
+    {
+        var full = new RectangleGeometry(new Rect(0, 0, Width, Height));
+        if (selection is { } rect)
+        {
+            DimOverlay.Data = new CombinedGeometry(GeometryCombineMode.Exclude, full, new RectangleGeometry(rect));
+        }
+        else
+        {
+            DimOverlay.Data = full;
+        }
+    }
+
+    /// <summary>Moves the size badge under the selection (or above it near the bottom edge).</summary>
+    private void UpdateSizeBadge(Rect selection)
+    {
+        SizeBadge.Visibility = Visibility.Visible;
+        SizeBadgeText.Text = $"{(int)selection.Width} × {(int)selection.Height}";
+
+        SizeBadge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var badgeWidth = SizeBadge.DesiredSize.Width;
+        var badgeHeight = SizeBadge.DesiredSize.Height;
+
+        var x = Math.Max(4, Math.Min(selection.Right - badgeWidth, Width - badgeWidth - 4));
+        var y = selection.Bottom + 8;
+        if (y + badgeHeight > Height - 4)
+        {
+            y = selection.Top - badgeHeight - 8;
+        }
+        SizeBadge.Margin = new Thickness(x, Math.Max(4, y), 0, 0);
     }
 
     private void Window_MouseDown(object sender, MouseButtonEventArgs e)
@@ -90,12 +125,13 @@ public partial class RegionSelector : Window
         {
             _isSelecting = true;
             _startPoint = e.GetPosition(this);
+            HintBadge.Visibility = Visibility.Collapsed;
 
             _selectionRectangle = new Rectangle
             {
-                Stroke = Brushes.Red,
-                StrokeThickness = 2,
-                Fill = new SolidColorBrush(Color.FromArgb(50, 255, 0, 0))
+                Stroke = new SolidColorBrush(Color.FromRgb(0xC2, 0x8E, 0x5C)),
+                StrokeThickness = 1.5,
+                Fill = Brushes.Transparent
             };
 
             Canvas.SetLeft(_selectionRectangle, _startPoint.X);
@@ -119,6 +155,10 @@ public partial class RegionSelector : Window
             Canvas.SetTop(_selectionRectangle, y);
             _selectionRectangle.Width = width;
             _selectionRectangle.Height = height;
+
+            var selection = new Rect(x, y, width, height);
+            UpdateDimOverlay(selection);
+            UpdateSizeBadge(selection);
         }
     }
 

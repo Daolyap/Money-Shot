@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build / Run
 
-The project is a WPF app targeting `net8.0-windows`. `EnableWindowsTargeting=true` is set in the csproj so it can be restored/built on non-Windows agents, but it can only be **run** on Windows.
+The project is a WPF app targeting `net10.0-windows`. `EnableWindowsTargeting=true` is set in the csproj so it can be restored/built on non-Windows agents, but it can only be **run** on Windows.
 
 ```powershell
 dotnet restore MoneyShot/MoneyShot.csproj
@@ -21,6 +21,17 @@ The MSI installer is built from `Installer/Product.wxs` using the WiX v4 toolset
 The base version lives in `MoneyShot/MoneyShot.csproj` (`<Version>`, `<AssemblyVersion>`, `<FileVersion>`). CI appends `$GITHUB_RUN_NUMBER` and passes `/p:AssemblyVersion=...`, `/p:FileVersion=...`, and `-d ProductVersion=...` (to WiX) so the assembly, file, and MSI versions all stay in sync. When bumping the version, update the csproj — CI handles the rest.
 
 ## Architecture
+
+### Theme & rendering rules (CocoaTheme)
+
+All visual styling lives in `MoneyShot/Themes/CocoaTheme.xaml` (merged in `App.xaml`): the cocoa-brown palette, vector icon geometries, and every control style (`ToolButton`, `AccentButton`, `SubtleButton`, `TitleBarButton`, `ColorSwatch`, `CocoaCheckBox`, `CocoaComboBox`, `CocoaSlider`, etc.). Rules:
+
+- **Never reintroduce `AllowsTransparency="True"`** on a window. Layered windows are composed in software for the whole surface — this was the editor's main source of lag. Custom title bars are done with `WindowChrome` (`CaptionHeight=0`, `GlassFrameThickness="0,0,0,1"` to keep the DWM shadow/rounded corners) plus `DragMove()` in the title-bar handler.
+- **No `DropShadowEffect`/`BlurEffect`** — WPF bitmap effects force per-element software rendering. Depth comes from the palette (surface vs. window colors), not shadows.
+- New surfaces pick brushes from the theme (`Cocoa.*Brush`); don't inline hex colors in views. (`RegionSelector.xaml` is the deliberate exception — it's a self-contained full-screen overlay.)
+- Icons are `Geometry` resources (`Icon.*`) rendered through the `ToolIcon`/`ToolIconFilled`/`CaptionIcon` Path styles — not emoji, which render inconsistently via font fallback.
+- Code-behind looks styles up with `FindResource` (App-scoped), not `Resources[...]` (window-scoped).
+- The pixelate tool (`CanvasRenderer.CreatePixelatedBrush`) copies only the covered region's pixels once and block-averages in that buffer. Don't go back to rendering the full image into a `RenderTargetBitmap` — at 4K that allocated ~33 MB per pixelation plus a `CroppedBitmap` per block.
 
 ### Two windows + service layer (no DI, no MVVM framework)
 

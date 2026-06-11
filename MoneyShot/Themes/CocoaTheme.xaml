@@ -1,0 +1,690 @@
+<!--
+    CocoaTheme.xaml — the single source of truth for Money Shot's visual identity.
+
+    Design rules (also documented in CLAUDE.md):
+      • Cocoa-brown dark palette. New surfaces pick from the brushes below — never inline hex.
+      • No DropShadowEffect / BlurEffect anywhere. WPF bitmap effects force expensive software
+        composition per element; the old per-button shadows were a measurable source of toolbar lag.
+      • All brushes are frozen (po:Freeze) so they can be shared across threads and skip
+        change-tracking overhead.
+      • Icons are vector Path geometries (20×20 design grid), not emoji — emoji glyphs render
+        inconsistently across Windows font fallback and read as unpolished.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    mc:Ignorable="po">
+
+    <!-- ═══════════════════════════ Palette ═══════════════════════════ -->
+
+    <Color x:Key="Cocoa.WindowColor">#221A13</Color>
+    <Color x:Key="Cocoa.TitleBarColor">#2A2018</Color>
+    <Color x:Key="Cocoa.SurfaceColor">#2E241A</Color>
+    <Color x:Key="Cocoa.SurfaceAltColor">#3A2D20</Color>
+    <Color x:Key="Cocoa.HoverColor">#46382A</Color>
+    <Color x:Key="Cocoa.PressedColor">#534333</Color>
+    <Color x:Key="Cocoa.BorderColor">#4C3C2B</Color>
+    <Color x:Key="Cocoa.BorderSubtleColor">#3A2E22</Color>
+    <Color x:Key="Cocoa.AccentColor">#C28E5C</Color>
+    <Color x:Key="Cocoa.AccentHoverColor">#D2A06E</Color>
+    <Color x:Key="Cocoa.AccentPressedColor">#AD7C4D</Color>
+    <Color x:Key="Cocoa.AccentSoftColor">#403122</Color>
+    <Color x:Key="Cocoa.OnAccentColor">#271C11</Color>
+    <Color x:Key="Cocoa.TextColor">#F1E9DE</Color>
+    <Color x:Key="Cocoa.TextSecondaryColor">#C8B69E</Color>
+    <Color x:Key="Cocoa.TextMutedColor">#97846C</Color>
+    <Color x:Key="Cocoa.DangerColor">#C75048</Color>
+    <Color x:Key="Cocoa.CanvasColor">#191209</Color>
+
+    <SolidColorBrush x:Key="Cocoa.WindowBrush"        Color="{StaticResource Cocoa.WindowColor}"        po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.TitleBarBrush"      Color="{StaticResource Cocoa.TitleBarColor}"      po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.SurfaceBrush"       Color="{StaticResource Cocoa.SurfaceColor}"       po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.SurfaceAltBrush"    Color="{StaticResource Cocoa.SurfaceAltColor}"    po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.HoverBrush"         Color="{StaticResource Cocoa.HoverColor}"         po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.PressedBrush"       Color="{StaticResource Cocoa.PressedColor}"       po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.BorderBrush"        Color="{StaticResource Cocoa.BorderColor}"        po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.BorderSubtleBrush"  Color="{StaticResource Cocoa.BorderSubtleColor}"  po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.AccentBrush"        Color="{StaticResource Cocoa.AccentColor}"        po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.AccentHoverBrush"   Color="{StaticResource Cocoa.AccentHoverColor}"   po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.AccentPressedBrush" Color="{StaticResource Cocoa.AccentPressedColor}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.AccentSoftBrush"    Color="{StaticResource Cocoa.AccentSoftColor}"    po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.OnAccentBrush"      Color="{StaticResource Cocoa.OnAccentColor}"      po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.TextBrush"          Color="{StaticResource Cocoa.TextColor}"          po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.TextSecondaryBrush" Color="{StaticResource Cocoa.TextSecondaryColor}" po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.TextMutedBrush"     Color="{StaticResource Cocoa.TextMutedColor}"     po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.DangerBrush"        Color="{StaticResource Cocoa.DangerColor}"        po:Freeze="True"/>
+    <SolidColorBrush x:Key="Cocoa.CanvasBrush"        Color="{StaticResource Cocoa.CanvasColor}"        po:Freeze="True"/>
+
+    <!-- ═══════════════════════════ Icon geometries (20×20 grid) ═══════════════════════════ -->
+
+    <Geometry x:Key="Icon.Cursor">M5,2 L5,15 L8.2,12.2 L10.4,17 L12.6,16 L10.4,11.4 L14.6,11.4 Z</Geometry>
+    <Geometry x:Key="Icon.Crop">M5.5,1.5 V14.5 H18.5 M1.5,5.5 H14.5 V18.5</Geometry>
+    <Geometry x:Key="Icon.Rectangle">M2.5,4.5 H17.5 V15.5 H2.5 Z</Geometry>
+    <Geometry x:Key="Icon.Ellipse">M10,4.5 A7.5,5.5 0 1 0 10,15.5 A7.5,5.5 0 1 0 10,4.5 Z</Geometry>
+    <Geometry x:Key="Icon.Arrow">M4,16 L15,5 M15,5 H9 M15,5 V11</Geometry>
+    <Geometry x:Key="Icon.Line">M3.5,16.5 L16.5,3.5</Geometry>
+    <Geometry x:Key="Icon.Freehand">M3,15 C5,7 7,17 10,10 C12,5.5 14,8 17,4.5</Geometry>
+    <Geometry x:Key="Icon.Number">M7.5,3.5 L6,16.5 M13.5,3.5 L12,16.5 M4,7.5 H16.5 M3.5,12.5 H16</Geometry>
+    <Geometry x:Key="Icon.Text">M4,5.5 V3.5 H16 V5.5 M10,3.5 V16.5 M8,16.5 H12</Geometry>
+    <Geometry x:Key="Icon.Pixelate">M3,3 H8 V8 H3 Z M8,8 H13 V13 H8 Z M13,3 H18 V8 H13 Z M3,13 H8 V18 H3 Z M13,13 H18 V18 H13 Z</Geometry>
+    <Geometry x:Key="Icon.Undo">M4,8 H12.5 A4.5,4.5 0 0 1 12.5,17 H7 M7.5,4.5 L4,8 L7.5,11.5</Geometry>
+    <Geometry x:Key="Icon.Refresh">M16.5,10 A6.5,6.5 0 1 1 13.2,4.35 M13.2,1.2 V4.7 H16.7</Geometry>
+    <Geometry x:Key="Icon.ZoomIn">M8.5,3 A5.5,5.5 0 1 0 8.5,14 A5.5,5.5 0 1 0 8.5,3 M12.7,12.7 L17,17 M8.5,6 V11 M6,8.5 H11</Geometry>
+    <Geometry x:Key="Icon.ZoomOut">M8.5,3 A5.5,5.5 0 1 0 8.5,14 A5.5,5.5 0 1 0 8.5,3 M12.7,12.7 L17,17 M6,8.5 H11</Geometry>
+    <Geometry x:Key="Icon.ZoomReset">M8.5,3 A5.5,5.5 0 1 0 8.5,14 A5.5,5.5 0 1 0 8.5,3 M12.7,12.7 L17,17</Geometry>
+    <Geometry x:Key="Icon.Save">M3.5,3.5 H13.5 L16.5,6.5 V16.5 H3.5 Z M6.5,3.5 V7.5 H12.5 V3.5 M5.5,16.5 V11.5 H14.5 V16.5</Geometry>
+    <Geometry x:Key="Icon.Copy">M7.5,5.5 V2.5 H17.5 V12.5 H14.5 M2.5,5.5 H12.5 V17.5 H2.5 Z</Geometry>
+    <Geometry x:Key="Icon.Camera">M3.5,6.5 H6.5 L8,4.5 H12 L13.5,6.5 H16.5 V15.5 H3.5 Z M10,8.5 A2.6,2.6 0 1 0 10,13.7 A2.6,2.6 0 1 0 10,8.5</Geometry>
+    <Geometry x:Key="Icon.Region">M3.5,6.5 V3.5 H6.5 M13.5,3.5 H16.5 V6.5 M16.5,13.5 V16.5 H13.5 M6.5,16.5 H3.5 V13.5</Geometry>
+    <Geometry x:Key="Icon.Monitor">M2.5,3.5 H17.5 V13.5 H2.5 Z M7,16.5 H13 M10,13.5 V16.5</Geometry>
+    <Geometry x:Key="Icon.History">M10,3 A7,7 0 1 0 10,17 A7,7 0 1 0 10,3 M10,6 V10 L13,12</Geometry>
+    <Geometry x:Key="Icon.Folder">M2.5,4.5 H8 L9.5,6.5 H17.5 V15.5 H2.5 Z</Geometry>
+    <Geometry x:Key="Icon.Settings">M3,5.5 H17 M3,10 H17 M3,14.5 H17 M7,3.5 V7.5 M13,8 V12 M5.5,12.5 V16.5</Geometry>
+    <Geometry x:Key="Icon.Info">M10,3 A7,7 0 1 0 10,17 A7,7 0 1 0 10,3 M10,9 V13.5 M10,6.4 V6.9</Geometry>
+    <Geometry x:Key="Icon.Help">M6.5,7 A3.5,3.5 0 1 1 10,10.5 V12.5 M10,15.4 V15.9</Geometry>
+
+    <!-- Window caption glyphs (10×10 grid) -->
+    <Geometry x:Key="Icon.WindowMinimize">M0,5 H10</Geometry>
+    <Geometry x:Key="Icon.WindowMaximize">M0.5,0.5 H9.5 V9.5 H0.5 Z</Geometry>
+    <Geometry x:Key="Icon.WindowRestore">M2.5,2.5 V0.5 H9.5 V7.5 H7.5 M0.5,2.5 H7.5 V9.5 H0.5 Z</Geometry>
+    <Geometry x:Key="Icon.WindowClose">M0.5,0.5 L9.5,9.5 M9.5,0.5 L0.5,9.5</Geometry>
+
+    <!-- Stroke-rendered icon inside a button. Stroke follows the button's Foreground so icons
+         recolor automatically on hover/active/disabled state changes. -->
+    <Style x:Key="ToolIcon" TargetType="Path">
+        <Setter Property="Stroke" Value="{Binding RelativeSource={RelativeSource AncestorType=ContentControl}, Path=Foreground}"/>
+        <Setter Property="StrokeThickness" Value="1.6"/>
+        <Setter Property="StrokeStartLineCap" Value="Round"/>
+        <Setter Property="StrokeEndLineCap" Value="Round"/>
+        <Setter Property="StrokeLineJoin" Value="Round"/>
+        <Setter Property="Width" Value="16"/>
+        <Setter Property="Height" Value="16"/>
+        <Setter Property="Stretch" Value="Uniform"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="SnapsToDevicePixels" Value="False"/>
+    </Style>
+
+    <!-- Fill-rendered variant for solid glyphs (cursor pointer, pixelate blocks). -->
+    <Style x:Key="ToolIconFilled" TargetType="Path" BasedOn="{StaticResource ToolIcon}">
+        <Setter Property="Stroke" Value="{x:Null}"/>
+        <Setter Property="Fill" Value="{Binding RelativeSource={RelativeSource AncestorType=ContentControl}, Path=Foreground}"/>
+    </Style>
+
+    <!-- ═══════════════════════════ Buttons ═══════════════════════════ -->
+
+    <!-- Quiet toolbar / utility button: transparent until hovered. -->
+    <Style x:Key="ToolButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextSecondaryBrush}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="Margin" Value="1,0"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource Cocoa.HoverBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{StaticResource Cocoa.PressedBrush}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{StaticResource Cocoa.TextMutedBrush}"/>
+                <Setter Property="Opacity" Value="0.6"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Active (selected) tool: caramel outline + warm fill so the current tool is obvious. -->
+    <Style x:Key="ToolButtonActive" TargetType="Button" BasedOn="{StaticResource ToolButton}">
+        <Setter Property="Background" Value="{StaticResource Cocoa.AccentSoftBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+    </Style>
+
+    <!-- Bordered secondary button (dialogs, settings). -->
+    <Style x:Key="SubtleButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
+        <Setter Property="Background" Value="{StaticResource Cocoa.SurfaceAltBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Cocoa.BorderBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+    </Style>
+
+    <!-- Primary call-to-action: caramel accent with dark text. -->
+    <Style x:Key="AccentButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource Cocoa.AccentBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.OnAccentBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="14,7"/>
+        <Setter Property="Margin" Value="1,0"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource Cocoa.AccentHoverBrush}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{StaticResource Cocoa.AccentPressedBrush}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Title-bar caption buttons. -->
+    <Style x:Key="TitleBarButton" TargetType="Button">
+        <Setter Property="Width" Value="44"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextSecondaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource Cocoa.HoverBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{StaticResource Cocoa.PressedBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Close button hovers red, matching Windows convention. -->
+    <Style x:Key="TitleBarCloseButton" TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#C42B1C"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="#B02315"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Caption glyph inside title-bar buttons. -->
+    <Style x:Key="CaptionIcon" TargetType="Path">
+        <Setter Property="Stroke" Value="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"/>
+        <Setter Property="StrokeThickness" Value="1"/>
+        <Setter Property="Width" Value="10"/>
+        <Setter Property="Height" Value="10"/>
+        <Setter Property="Stretch" Value="None"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- Round colour swatch for the annotation palette. The colour lives in Background so
+         code-behind (ColorButton_Click) can read it back as a SolidColorBrush. -->
+    <Style x:Key="ColorSwatch" TargetType="Button">
+        <Setter Property="Width" Value="24"/>
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="Margin" Value="2,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Cocoa.BorderBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="12">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource Cocoa.TextBrush}"/>
+                <Setter Property="BorderThickness" Value="2"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ═══════════════════════════ Inputs ═══════════════════════════ -->
+
+    <Style x:Key="CocoaTextBox" TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource Cocoa.SurfaceAltBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Cocoa.BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="5">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="CocoaCheckBox" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Border x:Name="Box" Width="17" Height="17" CornerRadius="4"
+                                Background="{StaticResource Cocoa.SurfaceAltBrush}"
+                                BorderBrush="{StaticResource Cocoa.BorderBrush}"
+                                BorderThickness="1.5"
+                                VerticalAlignment="Center">
+                            <Path x:Name="Check" Data="M3,8.5 L6.5,12 L13,4.5"
+                                  Stroke="{StaticResource Cocoa.OnAccentBrush}" StrokeThickness="2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Width="14" Height="14" Stretch="Uniform" Visibility="Collapsed"/>
+                        </Border>
+                        <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{StaticResource Cocoa.AccentBrush}"/>
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="CocoaRadioButton" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Border x:Name="Outer" Width="17" Height="17" CornerRadius="9"
+                                Background="{StaticResource Cocoa.SurfaceAltBrush}"
+                                BorderBrush="{StaticResource Cocoa.BorderBrush}"
+                                BorderThickness="1.5"
+                                VerticalAlignment="Center">
+                            <Ellipse x:Name="Dot" Width="7" Height="7"
+                                     Fill="{StaticResource Cocoa.AccentBrush}" Visibility="Collapsed"/>
+                        </Border>
+                        <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Outer" Property="BorderBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+                            <Setter TargetName="Dot" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Outer" Property="BorderBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="CocoaComboBoxItem" TargetType="ComboBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="9,6"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="4" Margin="3,1">
+                        <ContentPresenter/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Cocoa.HoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Cocoa.AccentSoftBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="CocoaComboBox" TargetType="ComboBox">
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="Background" Value="{StaticResource Cocoa.SurfaceAltBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Cocoa.BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="9,6"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="ItemContainerStyle" Value="{StaticResource CocoaComboBoxItem}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton Focusable="False" ClickMode="Press"
+                                      IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="Bd"
+                                            Background="{StaticResource Cocoa.SurfaceAltBrush}"
+                                            BorderBrush="{StaticResource Cocoa.BorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="5">
+                                        <Path HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              Margin="0,0,10,0"
+                                              Data="M0,0 L4,4 L8,0"
+                                              Stroke="{StaticResource Cocoa.TextSecondaryBrush}"
+                                              StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Cocoa.HoverBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <ContentPresenter IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          Margin="10,0,28,0"
+                                          VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <ContentPresenter.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
+                        <Popup Placement="Bottom"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               PopupAnimation="Fade">
+                            <Border Background="{StaticResource Cocoa.SurfaceBrush}"
+                                    BorderBrush="{StaticResource Cocoa.BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Margin="0,3,0,0"
+                                    MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                    SnapsToDevicePixels="True">
+                                <ScrollViewer Margin="0,3" SnapsToDevicePixels="True">
+                                    <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Minimal modern slider: 4px rounded track, round caramel thumb. -->
+    <Style x:Key="CocoaSlider" TargetType="Slider">
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.AccentBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid VerticalAlignment="Center">
+                        <Border Height="4" CornerRadius="2"
+                                Background="{StaticResource Cocoa.SurfaceAltBrush}"
+                                BorderBrush="{StaticResource Cocoa.BorderSubtleBrush}" BorderThickness="1"/>
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Height="4" CornerRadius="2" Background="{StaticResource Cocoa.AccentBrush}"/>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Background="Transparent" Height="14"/>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Focusable="False">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Ellipse Width="14" Height="14"
+                                                     Fill="{StaticResource Cocoa.AccentBrush}"
+                                                     Stroke="{StaticResource Cocoa.WindowBrush}" StrokeThickness="2"/>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════ Chrome bits ═══════════════════════════ -->
+
+    <Style x:Key="CocoaToolTip" TargetType="ToolTip">
+        <Setter Property="Background" Value="{StaticResource Cocoa.SurfaceAltBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Cocoa.BorderBrush}"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="Padding" Value="9,5"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Thin vertical divider between toolbar groups. -->
+    <Style x:Key="ToolbarDivider" TargetType="Rectangle">
+        <Setter Property="Width" Value="1"/>
+        <Setter Property="Margin" Value="9,4"/>
+        <Setter Property="Fill" Value="{StaticResource Cocoa.BorderSubtleBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+    </Style>
+
+    <!-- Slim scrollbars that match the theme. Applied per-window via implicit style scope. -->
+    <Style x:Key="CocoaScrollBarThumb" TargetType="Thumb">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="Bd" Background="{StaticResource Cocoa.BorderBrush}" CornerRadius="4" Margin="2"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Cocoa.TextMutedBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ScrollBar" x:Key="CocoaScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width" Value="11"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False"/>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource CocoaScrollBarThumb}"/>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="Height" Value="11"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid Background="Transparent">
+                                <Track x:Name="PART_Track">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageLeftCommand" Opacity="0" Focusable="False"/>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageRightCommand" Opacity="0" Focusable="False"/>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource CocoaScrollBarThumb}"/>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Context menu (history tiles). -->
+    <Style x:Key="CocoaContextMenu" TargetType="ContextMenu">
+        <Setter Property="Background" Value="{StaticResource Cocoa.SurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Cocoa.BorderBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="4">
+                        <StackPanel IsItemsHost="True"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="CocoaMenuItem" TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Padding="10,6">
+                        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Cocoa.HoverBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="CocoaMenuSeparator" TargetType="Separator">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Rectangle Height="1" Fill="{StaticResource Cocoa.BorderSubtleBrush}" Margin="6,4"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Card container used for grouped content (settings sections, main-window panels). -->
+    <Style x:Key="CocoaCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Cocoa.SurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Cocoa.BorderSubtleBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="20"/>
+    </Style>
+
+</ResourceDictionary>
