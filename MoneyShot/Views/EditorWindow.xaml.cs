@@ -37,6 +37,9 @@ public partial class EditorWindow : Window
     // Pixelate tool constant
     private const string PixelateTag = "pixelate";
 
+    // Number tool constant — identifies number-label TextBlocks so undo/delete can revert the counter
+    private const string NumberLabelTag = "numberLabel";
+
     // Resize fields
     private bool _isResizing;
     private ElementResizeMode _resizeMode = ElementResizeMode.None;
@@ -63,17 +66,24 @@ public partial class EditorWindow : Window
     // Visible square stays small but the click hit-zone is finger-sized to help on 4K displays.
     private const double HandleVisualSize = 12;
     private const double HandleHitZoneSize = 24;
-    
+
     // Crop fields
     private Rectangle? _cropRectangle;
     private bool _isCropping;
-    
+
     // Freehand drawing fields
     private Polyline? _currentPolyline;
     private Point _lastDrawPoint;
-    
+
     // Cached pen for hit testing to avoid repeated allocations
     private static readonly Pen HitTestPen = new(Brushes.Black, 10);
+
+    // Middle-mouse pan state. Held while the user is dragging with MMB to translate the view.
+    private bool _isPanning;
+    private Point _panStartPoint;
+    private double _panStartTranslateX;
+    private double _panStartTranslateY;
+    private Cursor? _savedCursorBeforePan;
 
     public EditorWindow(BitmapSource image)
     {
@@ -82,13 +92,56 @@ public partial class EditorWindow : Window
         _saveService = new SaveService();
         DisplayImage();
         SetupToolbar();
-        
+
         // Add keyboard event handler for Delete key
         KeyDown += EditorWindow_KeyDown;
-        
+
         // Add mouse wheel event handler for Ctrl + scroll zoom
         // Use PreviewMouseWheel to catch before ScrollViewer
         PreviewMouseWheel += EditorWindow_MouseWheel;
+
+        // Middle-mouse pan — drag with MMB scrolls the editor viewport like 3D modelling apps.
+        PreviewMouseDown += EditorWindow_PreviewMouseDown_Pan;
+        PreviewMouseMove += EditorWindow_PreviewMouseMove_Pan;
+        PreviewMouseUp += EditorWindow_PreviewMouseUp_Pan;
+
+        // WPF holds onto sizable native bitmap backings (Pbgra32 RenderTargetBitmaps, GDI brushes,
+        // CroppedBitmap, etc.) for the duration of the window. Without an explicit teardown the
+        // process working set sits at 600-700MB after the editor closes instead of returning to
+        // the dormant ~80MB level. ReleaseEditorResources() drops references; OpenEditor in
+        // MainWindow then forces a GC + working-set trim once we've fully unwound.
+        Closed += EditorWindow_Closed;
+    }
+
+    private void EditorWindow_Closed(object? sender, EventArgs e)
+    {
+        try
+        {
+            KeyDown -= EditorWindow_KeyDown;
+            PreviewMouseWheel -= EditorWindow_MouseWheel;
+            PreviewMouseDown -= EditorWindow_PreviewMouseDown_Pan;
+            PreviewMouseMove -= EditorWindow_PreviewMouseMove_Pan;
+            PreviewMouseUp -= EditorWindow_PreviewMouseUp_Pan;
+
+            DrawingCanvas?.Children.Clear();
+            _resizeHandles.Clear();
+            _selectionBorder = null;
+            _selectedElement = null;
+            _currentShape = null;
+            _currentPolyline = null;
+            _cropRectangle = null;
+            _undo.Clear();
+
+            if (ImageDisplay != null)
+            {
+                ImageDisplay.Source = null;
+            }
+            _originalImage = null!;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn("Editor teardown encountered a non-fatal error", ex);
+        }
     }
     
     private void EditorWindow_KeyDown(object sender, KeyEventArgs e)
@@ -225,16 +278,102 @@ public partial class EditorWindow : Window
             e.Handled = true;
         }
     }
+
+    // Middle-mouse-button pan — matches the convention used in Blender, Maya, Figma, and most
+    // image editors: hold MMB and drag to move the viewport. We translate the ImageCanvas via
+    // PanTransform rather than scrolling the ScrollViewer because the latter can't move when
+    // content fits inside the viewport — there's no overflow to scroll. The TranslateTransform
+    // works freely regardless of zoom level. Preview* events run before Canvas_MouseDown so the
+    // active drawing tool isn't disturbed.
+    private void EditorWindow_PreviewMouseDown_Pan(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle) return;
+
+        _isPanning = true;
+        _panStartPoint = e.GetPosition(this);
+        _panStartTranslateX = PanTransform.X;
+        _panStartTranslateY = PanTransform.Y;
+        _savedCursorBeforePan = Cursor;
+        Cursor = Cursors.SizeAll;
+        CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void EditorWindow_PreviewMouseMove_Pan(object sender, MouseEventArgs e)
+    {
+        if (!_isPanning) return;
+
+        var current = e.GetPosition(this);
+        // Drag direction tracks the cursor: pull right/down → content moves right/down.
+        PanTransform.X = _panStartTranslateX + (current.X - _panStartPoint.X);
+        PanTransform.Y = _panStartTranslateY + (current.Y - _panStartPoint.Y);
+        e.Handled = true;
+    }
+
+    private void EditorWindow_PreviewMouseUp_Pan(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle || !_isPanning) return;
+
+        _isPanning = false;
+        if (IsMouseCaptured)
+        {
+            ReleaseMouseCapture();
+        }
+        Cursor = _savedCursorBeforePan;
+        _savedCursorBeforePan = null;
+        e.Handled = true;
+    }
     
     private void DeleteSelectedElement()
     {
         if (_selectedElement != null)
         {
-            var index = DrawingCanvas.Children.IndexOf(_selectedElement);
-            _undo.Push(new UndoController.RemoveElementUndoAction(_selectedElement, index));
-            DrawingCanvas.Children.Remove(_selectedElement);
+            var element = _selectedElement;
+            var index = DrawingCanvas.Children.IndexOf(element);
+            _undo.Push(new UndoController.RemoveElementUndoAction(element, index));
+            DrawingCanvas.Children.Remove(element);
             ClearSelection();
+            SyncNumberCounterAfterRemoval(element);
         }
+    }
+
+    /// <summary>
+    /// After a number label leaves the canvas (undo or delete), pull the counter back down to
+    /// one past the highest label still present — so 1,2,3 + undo continues at 3, not 4. Never
+    /// raises the counter, so an explicit "reset numbering" survives unrelated deletions.
+    /// </summary>
+    private void SyncNumberCounterAfterRemoval(UIElement element)
+    {
+        if (element is TextBlock { Tag: NumberLabelTag })
+        {
+            _numberCounter = Math.Min(_numberCounter, HighestNumberLabelOnCanvas() + 1);
+        }
+    }
+
+    /// <summary>
+    /// After a number label returns to the canvas (undo of a delete), push the counter up past
+    /// it so the next placed number doesn't duplicate the restored one.
+    /// </summary>
+    private void SyncNumberCounterAfterRestore(UIElement element)
+    {
+        if (element is TextBlock { Tag: NumberLabelTag })
+        {
+            _numberCounter = Math.Max(_numberCounter, HighestNumberLabelOnCanvas() + 1);
+        }
+    }
+
+    private int HighestNumberLabelOnCanvas()
+    {
+        var max = 0;
+        foreach (var child in DrawingCanvas.Children)
+        {
+            if (child is TextBlock { Tag: NumberLabelTag } label &&
+                int.TryParse(label.Text, out var value) && value > max)
+            {
+                max = value;
+            }
+        }
+        return max;
     }
 
     // Hooks invoked by UndoController action records. These remain on EditorWindow because
@@ -247,6 +386,7 @@ public partial class EditorWindow : Window
         {
             ClearSelection();
         }
+        SyncNumberCounterAfterRemoval(element);
     }
 
     internal void UndoRemoveElement(UIElement element, int index)
@@ -254,6 +394,7 @@ public partial class EditorWindow : Window
         if (DrawingCanvas.Children.Contains(element)) return;
         var targetIndex = Math.Max(0, Math.Min(index, DrawingCanvas.Children.Count));
         DrawingCanvas.Children.Insert(targetIndex, element);
+        SyncNumberCounterAfterRestore(element);
     }
 
     internal void UndoCrop(BitmapSource previousImage, IReadOnlyList<UIElement> previousElements, int previousNumberCounter)
@@ -709,7 +850,8 @@ public partial class EditorWindow : Window
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(_currentColor),
             Background = new SolidColorBrush(Colors.White),
-            Padding = new Thickness(5)
+            Padding = new Thickness(5),
+            Tag = NumberLabelTag
         };
         Canvas.SetLeft(textBlock, _startPoint.X);
         Canvas.SetTop(textBlock, _startPoint.Y);
@@ -1712,6 +1854,11 @@ public partial class EditorWindow : Window
         _undo.Undo(this);
     }
 
+    private void ResetNumbering_Click(object sender, RoutedEventArgs e)
+    {
+        _numberCounter = 1;
+    }
+
     private void ApplyCrop()
     {
         if (_cropRectangle == null) return;
@@ -1858,6 +2005,10 @@ public partial class EditorWindow : Window
     {
         _zoomLevel = 1.0;
         ApplyZoom();
+        // Also recenter the MMB-pan translation so this button is a reliable "get me back to a
+        // known-good view" affordance — otherwise a user who panned off-screen has no way back.
+        PanTransform.X = 0;
+        PanTransform.Y = 0;
     }
 
     private void ApplyZoom()
@@ -1867,7 +2018,7 @@ public partial class EditorWindow : Window
     }
 
     private BitmapSource CaptureCanvasAsImage() =>
-        CanvasRenderer.CaptureCanvasAsImage(ImageCanvas, _originalImage, ZoomTransform);
+        CanvasRenderer.CaptureCanvasAsImage(ImageCanvas, _originalImage, ZoomTransform, PanTransform);
     
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
