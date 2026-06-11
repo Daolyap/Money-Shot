@@ -37,6 +37,9 @@ public partial class EditorWindow : Window
     // Pixelate tool constant
     private const string PixelateTag = "pixelate";
 
+    // Number tool constant — identifies number-label TextBlocks so undo/delete can revert the counter
+    private const string NumberLabelTag = "numberLabel";
+
     // Resize fields
     private bool _isResizing;
     private ElementResizeMode _resizeMode = ElementResizeMode.None;
@@ -325,11 +328,52 @@ public partial class EditorWindow : Window
     {
         if (_selectedElement != null)
         {
-            var index = DrawingCanvas.Children.IndexOf(_selectedElement);
-            _undo.Push(new UndoController.RemoveElementUndoAction(_selectedElement, index));
-            DrawingCanvas.Children.Remove(_selectedElement);
+            var element = _selectedElement;
+            var index = DrawingCanvas.Children.IndexOf(element);
+            _undo.Push(new UndoController.RemoveElementUndoAction(element, index));
+            DrawingCanvas.Children.Remove(element);
             ClearSelection();
+            SyncNumberCounterAfterRemoval(element);
         }
+    }
+
+    /// <summary>
+    /// After a number label leaves the canvas (undo or delete), pull the counter back down to
+    /// one past the highest label still present — so 1,2,3 + undo continues at 3, not 4. Never
+    /// raises the counter, so an explicit "reset numbering" survives unrelated deletions.
+    /// </summary>
+    private void SyncNumberCounterAfterRemoval(UIElement element)
+    {
+        if (element is TextBlock { Tag: NumberLabelTag })
+        {
+            _numberCounter = Math.Min(_numberCounter, HighestNumberLabelOnCanvas() + 1);
+        }
+    }
+
+    /// <summary>
+    /// After a number label returns to the canvas (undo of a delete), push the counter up past
+    /// it so the next placed number doesn't duplicate the restored one.
+    /// </summary>
+    private void SyncNumberCounterAfterRestore(UIElement element)
+    {
+        if (element is TextBlock { Tag: NumberLabelTag })
+        {
+            _numberCounter = Math.Max(_numberCounter, HighestNumberLabelOnCanvas() + 1);
+        }
+    }
+
+    private int HighestNumberLabelOnCanvas()
+    {
+        var max = 0;
+        foreach (var child in DrawingCanvas.Children)
+        {
+            if (child is TextBlock { Tag: NumberLabelTag } label &&
+                int.TryParse(label.Text, out var value) && value > max)
+            {
+                max = value;
+            }
+        }
+        return max;
     }
 
     // Hooks invoked by UndoController action records. These remain on EditorWindow because
@@ -342,6 +386,7 @@ public partial class EditorWindow : Window
         {
             ClearSelection();
         }
+        SyncNumberCounterAfterRemoval(element);
     }
 
     internal void UndoRemoveElement(UIElement element, int index)
@@ -349,6 +394,7 @@ public partial class EditorWindow : Window
         if (DrawingCanvas.Children.Contains(element)) return;
         var targetIndex = Math.Max(0, Math.Min(index, DrawingCanvas.Children.Count));
         DrawingCanvas.Children.Insert(targetIndex, element);
+        SyncNumberCounterAfterRestore(element);
     }
 
     internal void UndoCrop(BitmapSource previousImage, IReadOnlyList<UIElement> previousElements, int previousNumberCounter)
@@ -804,7 +850,8 @@ public partial class EditorWindow : Window
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(_currentColor),
             Background = new SolidColorBrush(Colors.White),
-            Padding = new Thickness(5)
+            Padding = new Thickness(5),
+            Tag = NumberLabelTag
         };
         Canvas.SetLeft(textBlock, _startPoint.X);
         Canvas.SetTop(textBlock, _startPoint.Y);
@@ -1805,6 +1852,11 @@ public partial class EditorWindow : Window
     private void Undo_Click(object sender, RoutedEventArgs e)
     {
         _undo.Undo(this);
+    }
+
+    private void ResetNumbering_Click(object sender, RoutedEventArgs e)
+    {
+        _numberCounter = 1;
     }
 
     private void ApplyCrop()

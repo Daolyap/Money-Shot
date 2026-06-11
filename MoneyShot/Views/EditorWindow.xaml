@@ -363,6 +363,11 @@
                                 <ToolTip Content="Undo (Ctrl+Z)"/>
                             </Button.ToolTip>
                         </Button>
+                        <Button Content="🔢 Reset numbering" Click="ResetNumbering_Click" Style="{StaticResource GlassButton}">
+                            <Button.ToolTip>
+                                <ToolTip Content="Restart number labels at 1"/>
+                            </Button.ToolTip>
+                        </Button>
                         <Button Content="🔍+ Zoom" Click="ZoomIn_Click" Style="{StaticResource GlassButton}">
                             <Button.ToolTip>
                                 <ToolTip Content="Zoom In (Ctrl++)"/>
