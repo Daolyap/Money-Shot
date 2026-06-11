@@ -112,8 +112,17 @@ public partial class HistoryWindow : Window
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        var editor = new EditorWindow(image);
-        editor.ShowDialog();
+        try
+        {
+            var editor = new EditorWindow(image);
+            editor.ShowDialog();
+        }
+        finally
+        {
+            // Same working-set trim the capture flow does — without it, opening a capture from
+            // history left hundreds of MB of bitmap backings resident after the editor closed.
+            MemoryTrimmer.TrimAfterEditorClose();
+        }
     }
 
     private void CopyToClipboard(HistoryEntry entry)

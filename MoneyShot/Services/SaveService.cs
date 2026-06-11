@@ -27,10 +27,12 @@ public class SaveService
         
         try
         {
-            BitmapEncoder? encoder = format.ToUpper() switch
+            BitmapEncoder encoder = format.ToUpper() switch
             {
                 "PNG" => new PngBitmapEncoder(),
-                "JPG" or "JPEG" => new JpegBitmapEncoder(),
+                // Default JPEG quality (75) visibly smears text in screenshots; 90 keeps
+                // UI text legible at a still-reasonable file size.
+                "JPG" or "JPEG" => new JpegBitmapEncoder { QualityLevel = 90 },
                 "BMP" => new BmpBitmapEncoder(),
                 "GIF" => new GifBitmapEncoder(),
                 _ => new PngBitmapEncoder()
@@ -120,9 +122,16 @@ public class SaveService
             
             foreach (var sysDir in systemDirs)
             {
-                if (!string.IsNullOrEmpty(sysDir) && 
-                    !string.IsNullOrEmpty(directory) && 
-                    directory.StartsWith(sysDir, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrEmpty(sysDir) || string.IsNullOrEmpty(directory))
+                {
+                    continue;
+                }
+
+                // Compare with a trailing separator so "C:\Windows" blocks "C:\Windows\..."
+                // and "C:\Windows" itself, but not sibling folders like "C:\WindowsBackup".
+                var sysDirWithSeparator = Path.TrimEndingDirectorySeparator(sysDir) + Path.DirectorySeparatorChar;
+                var directoryWithSeparator = Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar;
+                if (directoryWithSeparator.StartsWith(sysDirWithSeparator, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new ArgumentException("Cannot save to system directories.", nameof(filePath));
                 }

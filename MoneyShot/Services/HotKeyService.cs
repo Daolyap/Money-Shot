@@ -33,6 +33,10 @@ public class HotKeyService
             _hotKeyActions[_currentId] = action;
             return _currentId;
         }
+
+        // Most often the combination is already claimed by another application (or by a
+        // still-running instance). Without this log the hotkey just silently does nothing.
+        Logger.Warn($"RegisterHotKey failed for modifiers=0x{modifiers:X} key=0x{key:X} — combination may be in use by another application.");
         return -1;
     }
 
@@ -59,7 +63,16 @@ public class HotKeyService
             var id = wParam.ToInt32();
             if (_hotKeyActions.TryGetValue(id, out var action))
             {
-                action?.Invoke();
+                try
+                {
+                    action?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    // An exception escaping a window-procedure hook can take down the process;
+                    // a failed capture should be logged, not fatal.
+                    Logger.Error("Hotkey action threw", ex);
+                }
                 handled = true;
             }
         }
