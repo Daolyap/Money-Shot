@@ -152,7 +152,11 @@ public class SettingsService
         {
             settings.DefaultLineThickness = 3;
         }
-        
+
+        // Clamp history retention to the range the UI offers (0 disables retention
+        // enforcement) so a hand-edited settings.json can't request absurd values.
+        settings.HistoryRetentionCount = Math.Clamp(settings.HistoryRetentionCount, 0, 500);
+
         return settings;
     }
 

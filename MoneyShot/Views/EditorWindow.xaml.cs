@@ -102,7 +102,6 @@ public partial class EditorWindow : Window
         _originalImage = image;
         _saveService = new SaveService();
         DisplayImage();
-        SetupToolbar();
 
         // Add keyboard event handler for Delete key
         KeyDown += EditorWindow_KeyDown;
@@ -438,11 +437,6 @@ public partial class EditorWindow : Window
         // Update canvas size to match image
         DrawingCanvas.Width = _originalImage.PixelWidth;
         DrawingCanvas.Height = _originalImage.PixelHeight;
-    }
-
-    private void SetupToolbar()
-    {
-        // Tool buttons will be set up in XAML
     }
 
     private Point ClampToCanvasBounds(Point point)
@@ -1093,12 +1087,8 @@ public partial class EditorWindow : Window
 
     private bool IsPointInElement(UIElement element, Point point)
     {
-        var left = Canvas.GetLeft(element);
-        var top = Canvas.GetTop(element);
-        
-        // Handle NaN values (elements without explicit positioning)
-        if (double.IsNaN(left)) left = 0;
-        if (double.IsNaN(top)) top = 0;
+        var left = CanvasPosition.GetLeft(element);
+        var top = CanvasPosition.GetTop(element);
 
         if (element is Path path)
         {
@@ -1947,12 +1937,18 @@ public partial class EditorWindow : Window
         try
         {
             var finalImage = CaptureCanvasAsImage();
-            
+
+            // Honour the user's configured save folder and default format — previously the
+            // dialog always opened wherever Windows last left it, defaulting to PNG.
+            var settings = new SettingsService().LoadSettings();
+            var defaultFormat = settings.DefaultFileFormat.ToUpperInvariant();
             var saveDialog = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "PNG Image|*.png|JPEG Image|*.jpg|Bitmap Image|*.bmp",
-                DefaultExt = ".png",
-                FileName = _saveService.GenerateFileName("PNG")
+                FilterIndex = defaultFormat switch { "JPG" or "JPEG" => 2, "BMP" => 3, _ => 1 },
+                DefaultExt = defaultFormat switch { "JPG" or "JPEG" => ".jpg", "BMP" => ".bmp", _ => ".png" },
+                InitialDirectory = settings.DefaultSavePath,
+                FileName = _saveService.GenerateFileName(settings.DefaultFileFormat)
             };
 
             if (saveDialog.ShowDialog() == true)

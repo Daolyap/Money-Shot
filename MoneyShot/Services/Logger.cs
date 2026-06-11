@@ -31,9 +31,13 @@ internal static class Logger
 
     private static void Write(string level, string message, Exception? exception)
     {
+        // Errors get the full exception (incl. stack trace) — "ERR ... :: IOException: access
+        // denied" alone is rarely enough to diagnose a user report. Warnings stay single-line.
         var line = exception == null
             ? $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}"
-            : $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message} :: {exception.GetType().Name}: {exception.Message}";
+            : level == "ERR"
+                ? $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message} :: {exception}"
+                : $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message} :: {exception.GetType().Name}: {exception.Message}";
 
         System.Diagnostics.Debug.WriteLine(line);
 
