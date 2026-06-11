@@ -57,13 +57,18 @@ public partial class SettingsWindow : Window
 
         DisableWindowsPrintScreenCheckbox.IsChecked = _settings.DisableWindowsPrintScreen;
         SavePathTextBox.Text = _settings.DefaultSavePath;
-        
+
         SaveToClipboardRadio.IsChecked = _settings.DefaultSaveDestination == SaveDestination.Clipboard;
         SaveToFileRadio.IsChecked = _settings.DefaultSaveDestination == SaveDestination.File;
         SaveToBothRadio.IsChecked = _settings.DefaultSaveDestination == SaveDestination.Both;
 
-        FormatComboBox.SelectedItem = _settings.DefaultFileFormat;
-        
+        SelectComboBoxItem(FormatComboBox, _settings.DefaultFileFormat);
+
+        // History settings
+        SaveToHistoryCheckbox.IsChecked = _settings.SaveCapturesToHistory;
+        HistoryRetentionTextBox.Text = _settings.HistoryRetentionCount.ToString();
+        HistoryFolderText.Text = new HistoryService().HistoryDirectory;
+
         // Load hotkey settings
         SelectComboBoxItem(HotKeyCaptureComboBox, _settings.HotKeyCapture);
         SelectComboBoxItem(HotKeyRegionCaptureComboBox, _settings.HotKeyRegionCapture);
@@ -128,8 +133,16 @@ public partial class SettingsWindow : Window
             else
                 _settings.DefaultSaveDestination = SaveDestination.Both;
 
-            if (FormatComboBox.SelectedItem is string format)
-                _settings.DefaultFileFormat = format;
+            // Items are ComboBoxItems, not raw strings — reading SelectedItem as a string used to
+            // silently skip saving the format.
+            if (FormatComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem formatItem)
+                _settings.DefaultFileFormat = formatItem.Content?.ToString() ?? "PNG";
+
+            _settings.SaveCapturesToHistory = SaveToHistoryCheckbox.IsChecked ?? true;
+            if (int.TryParse(HistoryRetentionTextBox.Text, out var retention))
+            {
+                _settings.HistoryRetentionCount = Math.Clamp(retention, 0, 500);
+            }
 
             // Save hotkey settings
             if (HotKeyCaptureComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem captureItem)
@@ -179,6 +192,59 @@ public partial class SettingsWindow : Window
     {
         Close();
     }
+
+    private void ViewLogs_Click(object sender, RoutedEventArgs e)
+    {
+        OpenFolderInExplorer(Logger.LogDirectoryPath);
+    }
+
+    private void OpenHistoryFolder_Click(object sender, RoutedEventArgs e)
+    {
+        OpenFolderInExplorer(new HistoryService().HistoryDirectory);
+    }
+
+    private static void OpenFolderInExplorer(string path)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed to open folder '{path}'", ex);
+            MessageBox.Show($"Could not open folder:\n{path}", "Money Shot",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void ClearHistory_Click(object sender, RoutedEventArgs e)
+    {
+        var history = new HistoryService();
+        var entries = history.List();
+        if (entries.Count == 0)
+        {
+            MessageBox.Show("History is already empty.", "Money Shot",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var result = MessageBox.Show(
+            $"Delete all {entries.Count} captures from local history? This cannot be undone.",
+            "Clear history",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        foreach (var entry in entries)
+        {
+            history.Delete(entry);
+        }
+        MessageBox.Show("History cleared.", "Money Shot", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
     
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -211,18 +277,12 @@ public partial class SettingsWindow : Window
         if (WindowState == WindowState.Maximized)
         {
             WindowState = WindowState.Normal;
-            if (MaximizeRestoreButton != null)
-            {
-                MaximizeRestoreButton.Content = "🗖";
-            }
+            MaximizeRestoreIcon.Data = (System.Windows.Media.Geometry)FindResource("Icon.WindowMaximize");
         }
         else
         {
             WindowState = WindowState.Maximized;
-            if (MaximizeRestoreButton != null)
-            {
-                MaximizeRestoreButton.Content = "🗗";
-            }
+            MaximizeRestoreIcon.Data = (System.Windows.Media.Geometry)FindResource("Icon.WindowRestore");
         }
     }
     

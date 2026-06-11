@@ -16,8 +16,12 @@ namespace MoneyShot.Services;
 
 public sealed class AutoUpdateService
 {
+    // SECURITY: must track the repository's CURRENT name. The repo was renamed from
+    // "MoneyShot" to "Money-Shot"; GitHub redirects the old name only until someone
+    // re-registers it, at which point they would control this app's update channel
+    // (repojacking). If the repo is ever renamed again, update this immediately.
     private const string Owner = "Daolyap";
-    private const string Repository = "MoneyShot";
+    private const string Repository = "Money-Shot";
     private const string LatestReleaseUrl = $"https://api.github.com/repos/{Owner}/{Repository}/releases/latest";
     private const string AllReleasesUrl = $"https://api.github.com/repos/{Owner}/{Repository}/releases?per_page=1";
     private static readonly Regex VersionNumberRegex = new(@"\d+", RegexOptions.Compiled);
@@ -48,7 +52,10 @@ public sealed class AutoUpdateService
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         }
 
-        var token = Environment.GetEnvironmentVariable(""); // I can put a GitHub token in here if I want authenticated API requests
+        // Optional: authenticated API requests (higher rate limit). The 401 guidance message
+        // below already documents this variable name. Treat the value as a secret — it is only
+        // ever sent to api.github.com over HTTPS and never logged.
+        var token = Environment.GetEnvironmentVariable("MONEYSHOT_GITHUB_TOKEN");
         if (!string.IsNullOrWhiteSpace(token) && _httpClient.DefaultRequestHeaders.Authorization == null)
         {
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Trim());

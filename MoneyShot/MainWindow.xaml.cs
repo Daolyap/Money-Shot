@@ -135,44 +135,47 @@ public partial class MainWindow : Window
     private void PopulateMonitorButtons()
     {
         var screens = _screenshotService.GetAllScreens();
-        if (screens.Count > 1)
+        if (screens.Count <= 1) return;
+
+        var label = new TextBlock
         {
-            var separator = new Separator
-            {
-                Margin = new Thickness(0, 10, 0, 5),
-                Background = new SolidColorBrush(Color.FromRgb(85, 85, 85))
-            };
-            MonitorButtonsPanel.Children.Add(separator);
+            Text = "Individual monitors",
+            FontSize = 12,
+            Foreground = (Brush)FindResource("Cocoa.TextSecondaryBrush"),
+            Margin = new Thickness(0, 10, 0, 6)
+        };
+        MonitorButtonsPanel.Children.Add(label);
 
-            var label = new TextBlock
-            {
-                Text = "Individual Monitors:",
-                FontSize = 14,
-                Foreground = new SolidColorBrush(Colors.White),
-                Margin = new Thickness(0, 5, 0, 5),
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center
-            };
-            MonitorButtonsPanel.Children.Add(label);
+        var subtleStyle = (Style)FindResource("SubtleButton");
+        var monitorIcon = (Geometry)FindResource("Icon.Monitor");
+        var iconStyle = (Style)FindResource("ToolIcon");
+        for (int i = 0; i < screens.Count; i++)
+        {
+            var screenIndex = i;
+            var screen = screens[i];
+            var isPrimary = screen.Primary ? "  ·  primary" : string.Empty;
+            var hotkeyHint = screenIndex < MaxMonitorHotkeys ? $"Ctrl+Shift+{screenIndex + 1}" : null;
 
-            for (int i = 0; i < screens.Count; i++)
+            var content = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+            content.Children.Add(new System.Windows.Shapes.Path { Style = iconStyle, Data = monitorIcon });
+            content.Children.Add(new TextBlock
             {
-                var screenIndex = i;
-                var screen = screens[i];
-                var isPrimary = screen.Primary ? " (Primary)" : "";
-                var button = new System.Windows.Controls.Button
-                {
-                    Content = $"🖥️ Monitor {i + 1}{isPrimary}",
-                    Padding = new Thickness(20, 10, 20, 10),
-                    Margin = new Thickness(0, 3, 0, 3),
-                    FontSize = 14,
-                    Background = new SolidColorBrush(Color.FromRgb(62, 62, 66)),
-                    Foreground = new SolidColorBrush(Colors.White),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85)),
-                    Cursor = System.Windows.Input.Cursors.Hand
-                };
-                button.Click += (s, ev) => CaptureMonitor(screenIndex);
-                MonitorButtonsPanel.Children.Add(button);
-            }
+                Text = $"Monitor {i + 1}{isPrimary}",
+                Margin = new Thickness(9, 0, 0, 0),
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
+            });
+
+            var button = new System.Windows.Controls.Button
+            {
+                Content = content,
+                Style = subtleStyle,
+                Padding = new Thickness(14, 9, 14, 9),
+                Margin = new Thickness(0, 3, 0, 3),
+                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
+                ToolTip = hotkeyHint == null ? null : $"Capture this monitor (hotkey: {hotkeyHint})"
+            };
+            button.Click += (s, ev) => CaptureMonitor(screenIndex);
+            MonitorButtonsPanel.Children.Add(button);
         }
     }
 
@@ -389,35 +392,10 @@ public partial class MainWindow : Window
         finally
         {
             // The editor's BitmapSource backings, RenderTargetBitmaps and pixelate brushes live in
-            // both managed and native heaps. Without forcing a collection plus a working-set trim,
-            // the process sits at several hundred MB until the next major GC — undesirable for a
-            // tray app that should hover near 80MB while idle.
-            ReleaseEditorMemory();
+            // both managed and native heaps — see MemoryTrimmer for why this is forced here.
+            MemoryTrimmer.TrimAfterEditorClose();
         }
     }
-
-    private static void ReleaseEditorMemory()
-    {
-        try
-        {
-            System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
-                System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
-            GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-
-            // Ask Windows to trim the working set. -1, -1 is the documented "trim now" sentinel.
-            using var process = System.Diagnostics.Process.GetCurrentProcess();
-            SetProcessWorkingSetSize(process.Handle, new IntPtr(-1), new IntPtr(-1));
-        }
-        catch (Exception ex)
-        {
-            MoneyShot.Services.Logger.Warn("Could not release editor memory", ex);
-        }
-    }
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool SetProcessWorkingSetSize(IntPtr proc, IntPtr min, IntPtr max);
 
     private void ShowSettings()
     {
@@ -461,32 +439,30 @@ public partial class MainWindow : Window
         ShowSettings();
     }
 
+    private void History_Click(object sender, RoutedEventArgs e)
+    {
+        ShowHistory();
+    }
+
     private void About_Click(object sender, RoutedEventArgs e)
     {
         var settings = _settingsService.LoadSettings();
         var screens = _screenshotService.GetAllScreens();
-        var monitorHotkeys = screens.Count > 1 ? $"\n• Ctrl+Shift+1-{Math.Min(screens.Count, MaxMonitorHotkeys)} - Capture individual monitors" : "";
-        
+        var monitorHotkeys = screens.Count > 1 ? $"\n• Ctrl+Shift+1-{Math.Min(screens.Count, MaxMonitorHotkeys)} — Capture individual monitors" : "";
+        // SemVer portion only — the 4th part is the CI build number and isn't meaningful to users.
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var displayVersion = version == null ? "unknown" : $"{version.Major}.{version.Minor}.{version.Build}";
+
         System.Windows.MessageBox.Show(
-            "Money Shot - Incredible AI Slop\n\n" +
-            "Version 2.0.0\n\n" +
+            "Money Shot — screenshot capture and annotation for Windows\n\n" +
+            $"Version {displayVersion}\n" +
             "Developed by Daolyap & iSaluki\n\n" +
-            "Features:\n" +
-            "• Full screen, region, and individual monitor capture\n" +
-            "• Multi-monitor support\n" +
-            "• Rich annotation tools (shapes, text, arrows, numbers, blur)\n" +
-            "• Customizable hotkeys\n" +
-            "• Save to file or clipboard\n" +
-            "• System tray integration\n" +
-            "• Start in tray option\n" +
-            "• Disable default print screen behaviour\n\n" +
-            "Current Hotkeys:\n" +
-            $"• {settings.HotKeyCapture} - Capture full screen\n" +
-            $"• {settings.HotKeyRegionCapture} - Capture region" +
+            "Current hotkeys:\n" +
+            $"• {settings.HotKeyCapture} — Capture full screen\n" +
+            $"• {settings.HotKeyRegionCapture} — Capture region" +
             monitorHotkeys +
-            "\n\nContact:\n" +
-            "Features - https://github.com/daolyap/moneyshot/issues\n" +
-            "Security - moneyshot@daolyap.dev",
+            "\n\nFeedback & issues: https://github.com/Daolyap/Money-Shot/issues\n" +
+            "Security contact: moneyshot@daolyap.dev",
             "About Money Shot",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -552,21 +528,15 @@ public partial class MainWindow : Window
         if (WindowState == WindowState.Maximized)
         {
             WindowState = WindowState.Normal;
-            if (MaximizeRestoreButton != null)
-            {
-                MaximizeRestoreButton.Content = "🗖";
-            }
+            MaximizeRestoreIcon.Data = (Geometry)FindResource("Icon.WindowMaximize");
         }
         else
         {
             WindowState = WindowState.Maximized;
-            if (MaximizeRestoreButton != null)
-            {
-                MaximizeRestoreButton.Content = "🗗";
-            }
+            MaximizeRestoreIcon.Data = (Geometry)FindResource("Icon.WindowRestore");
         }
     }
-    
+
     private void Close_Click(object sender, RoutedEventArgs e)
     {
         Close();

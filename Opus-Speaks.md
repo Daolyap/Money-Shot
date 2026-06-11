@@ -67,6 +67,18 @@ SHA-256 verification protects against tampering between GitHub Releases and the 
 >
 > Until this lands, the SHA-256 check is the only integrity guarantee — that's still meaningfully better than nothing.
 
+## E2. Region selector is only pixel-accurate at 100 % display scaling
+
+Found during the 2026-06 security/code audit. The app manifest declares `PerMonitorV2` DPI awareness, but `RegionSelector` sets its window `Width`/`Height` (DIPs) directly from physical pixel bounds and maps mouse DIP positions 1:1 onto frozen-bitmap pixel coordinates. At 100 % scaling DIP == pixel and everything lines up; at 125 %/150 % (or mixed-DPI multi-monitor) the window oversizes and crops drift.
+
+> Fixing this properly needs one selector window per monitor (each in its own DPI context) or explicit `CompositionTarget.TransformToDevice` math when converting selection rects to bitmap pixels. The mixed-DPI virtual-screen mapping is nonlinear — don't try to patch it with a single global scale factor.
+
+## E3. Auto-update can't swap a per-machine install
+
+`StageAndPrepareUpdateAsync` writes the swap script to user temp and runs it unelevated. For per-user installs that's fine, but the MSI installs to `C:\Program Files\Money Shot\` (per-machine), where `move /Y` will fail with access denied and the update silently doesn't apply (script exits 1, nothing re-launches).
+
+> Either: detect a Program Files install and direct the user to download the MSI instead of self-swapping; or run the script elevated (UAC prompt) via `UseShellExecute = true` + `Verb = "runas"`. Decide deliberately — silent elevation prompts from a background updater are hostile UX.
+
 ## F. Migrate to `Microsoft.Extensions.Logging` if a real DI need ever appears
 
 The current `Logger` static facade closes the "no Release-build output" gap, but it doesn't enable structured logging, log levels controlled by config, or per-namespace filtering. If the project ever takes on a complexity that justifies DI (multiple loggers, multiple sinks, `ILogger<T>` for testability), the right move is the originally-proposed migration from this document — replace `Logger` with `Microsoft.Extensions.Logging` + a logger factory in `App.xaml.cs`, then take constructor-injected `ILogger<T>` in each service.

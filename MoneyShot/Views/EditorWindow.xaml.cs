@@ -78,6 +78,17 @@ public partial class EditorWindow : Window
     // Cached pen for hit testing to avoid repeated allocations
     private static readonly Pen HitTestPen = new(Brushes.Black, 10);
 
+    // Selection chrome (border + handles). Bright caramel matches the cocoa theme and stays
+    // visible against most screenshot content. Frozen so it can be shared by every handle.
+    private static readonly SolidColorBrush SelectionBrush = CreateFrozen(Color.FromRgb(0xE8, 0xA8, 0x5C));
+
+    private static SolidColorBrush CreateFrozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
     // Middle-mouse pan state. Held while the user is dragging with MMB to translate the view.
     private bool _isPanning;
     private Point _panStartPoint;
@@ -91,7 +102,6 @@ public partial class EditorWindow : Window
         _originalImage = image;
         _saveService = new SaveService();
         DisplayImage();
-        SetupToolbar();
 
         // Add keyboard event handler for Delete key
         KeyDown += EditorWindow_KeyDown;
@@ -169,36 +179,36 @@ public partial class EditorWindow : Window
             switch (e.Key)
             {
                 case Key.R:
-                    _currentTool = AnnotationTool.Rectangle;
+                    SelectTool(AnnotationTool.Rectangle);
                     e.Handled = true;
                     break;
                 case Key.C when !e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control):
-                    _currentTool = AnnotationTool.Circle;
+                    SelectTool(AnnotationTool.Circle);
                     e.Handled = true;
                     break;
                 case Key.A when !e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control):
-                    _currentTool = AnnotationTool.Arrow;
+                    SelectTool(AnnotationTool.Arrow);
                     e.Handled = true;
                     break;
                 case Key.L:
-                    _currentTool = AnnotationTool.Line;
+                    SelectTool(AnnotationTool.Line);
                     e.Handled = true;
                     break;
                 case Key.F:
-                    _currentTool = AnnotationTool.Freehand;
+                    SelectTool(AnnotationTool.Freehand);
                     e.Handled = true;
                     break;
                 case Key.T:
-                    _currentTool = AnnotationTool.Text;
+                    SelectTool(AnnotationTool.Text);
                     e.Handled = true;
                     break;
                 case Key.P:
-                    _currentTool = AnnotationTool.Blur;
+                    SelectTool(AnnotationTool.Blur);
                     e.Handled = true;
                     break;
                 case Key.D1:
                 case Key.NumPad1:
-                    _currentTool = AnnotationTool.Number;
+                    SelectTool(AnnotationTool.Number);
                     e.Handled = true;
                     break;
                 case Key.Escape:
@@ -409,7 +419,7 @@ public partial class EditorWindow : Window
         _cropRectangle = null;
         _isCropping = false;
         _numberCounter = previousNumberCounter;
-        _currentTool = AnnotationTool.Cursor;
+        SelectTool(AnnotationTool.Cursor);
         ClearSelection();
     }
 
@@ -427,11 +437,6 @@ public partial class EditorWindow : Window
         // Update canvas size to match image
         DrawingCanvas.Width = _originalImage.PixelWidth;
         DrawingCanvas.Height = _originalImage.PixelHeight;
-    }
-
-    private void SetupToolbar()
-    {
-        // Tool buttons will be set up in XAML
     }
 
     private Point ClampToCanvasBounds(Point point)
@@ -862,65 +867,64 @@ public partial class EditorWindow : Window
 
     private TextBlock? CreateTextLabel()
     {
-        // Show a simple input dialog
+        // Small modal prompt for the label text, styled from the cocoa theme.
         var inputDialog = new Window
         {
-            Title = "Enter Text",
-            Width = 300,
-            Height = 150,
+            Title = "Add text",
+            Width = 340,
+            SizeToContent = SizeToContent.Height,
+            ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
-            Background = new SolidColorBrush(Color.FromRgb(45, 45, 48))
+            Background = (Brush)FindResource("Cocoa.WindowBrush"),
+            Foreground = (Brush)FindResource("Cocoa.TextBrush")
         };
 
-        var grid = new Grid { Margin = new Thickness(10) };
+        var grid = new Grid { Margin = new Thickness(16) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var label = new TextBlock
         {
-            Text = "Enter text:",
-            Foreground = Brushes.White,
-            Margin = new Thickness(0, 0, 0, 5)
+            Text = "Label text",
+            Foreground = (Brush)FindResource("Cocoa.TextSecondaryBrush"),
+            Margin = new Thickness(0, 0, 0, 6)
         };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
 
         var textBox = new TextBox
         {
-            Margin = new Thickness(0, 5, 0, 10),
-            Padding = new Thickness(5),
-            Background = new SolidColorBrush(Color.FromRgb(62, 62, 66)),
-            Foreground = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85))
+            Style = (Style)FindResource("CocoaTextBox"),
+            Margin = new Thickness(0, 0, 0, 14)
         };
         Grid.SetRow(textBox, 1);
         grid.Children.Add(textBox);
 
         var okButton = new Button
         {
-            Content = "OK",
-            Padding = new Thickness(20, 5, 20, 5),
-            Background = new SolidColorBrush(Color.FromRgb(14, 99, 156)),
-            Foreground = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(17, 119, 187)),
-            HorizontalAlignment = HorizontalAlignment.Right
+            Content = "Add",
+            Style = (Style)FindResource("AccentButton"),
+            MinWidth = 76,
+            IsDefault = true
         };
         okButton.Click += (s, e) => inputDialog.DialogResult = true;
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            Style = (Style)FindResource("SubtleButton"),
+            MinWidth = 76,
+            Margin = new Thickness(0, 0, 8, 0),
+            IsCancel = true
+        };
 
         var buttonPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            Padding = new Thickness(20, 5, 20, 5),
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        cancelButton.Click += (s, e) => inputDialog.DialogResult = false;
         buttonPanel.Children.Add(cancelButton);
         buttonPanel.Children.Add(okButton);
         Grid.SetRow(buttonPanel, 2);
@@ -1083,12 +1087,8 @@ public partial class EditorWindow : Window
 
     private bool IsPointInElement(UIElement element, Point point)
     {
-        var left = Canvas.GetLeft(element);
-        var top = Canvas.GetTop(element);
-        
-        // Handle NaN values (elements without explicit positioning)
-        if (double.IsNaN(left)) left = 0;
-        if (double.IsNaN(top)) top = 0;
+        var left = CanvasPosition.GetLeft(element);
+        var top = CanvasPosition.GetTop(element);
 
         if (element is Path path)
         {
@@ -1155,7 +1155,7 @@ public partial class EditorWindow : Window
         // Add visual indicator for selection
         _selectionBorder = new Border
         {
-            BorderBrush = new SolidColorBrush(Colors.Blue),
+            BorderBrush = SelectionBrush,
             BorderThickness = new Thickness(2),
             IsHitTestVisible = false
         };
@@ -1224,7 +1224,7 @@ public partial class EditorWindow : Window
     {
         ClearResizeHandlesOnly();
 
-        var handleColor = new SolidColorBrush(Colors.Blue);
+        var handleColor = SelectionBrush;
 
         // 8-handle bounding box. Corner handles drive proportional resize, edges drive single-axis.
         _resizeHandles.Add(CreateResizeHandle(left - 2,                  top - 2,                   handleColor, ElementResizeMode.TopLeft));
@@ -1240,7 +1240,7 @@ public partial class EditorWindow : Window
     private void CreateEndpointHandles(Point start, Point end)
     {
         ClearResizeHandlesOnly();
-        var handleColor = new SolidColorBrush(Colors.Blue);
+        var handleColor = SelectionBrush;
         var startHandle = CreateEndpointHandle(start, handleColor, isStart: true);
         var endHandle   = CreateEndpointHandle(end,   handleColor, isStart: false);
         _resizeHandles.Add(startHandle);
@@ -1704,28 +1704,26 @@ public partial class EditorWindow : Window
         {
             if (Enum.TryParse<AnnotationTool>(toolName, out var tool))
             {
-                _currentTool = tool;
-                UpdateActiveToolButton(button);
+                SelectTool(tool);
             }
         }
     }
 
     /// <summary>
-    /// Highlights the toolbar button for the active tool by swapping its style. Walks up the
-    /// visual tree to find the WrapPanel that holds all tool buttons so we don't need named
-    /// references for each one.
+    /// Switches the active tool and highlights its toolbar button. Used by both toolbar clicks
+    /// and keyboard shortcuts so the highlight never goes out of sync with the actual tool.
     /// </summary>
-    private void UpdateActiveToolButton(Button activeButton)
+    private void SelectTool(AnnotationTool tool)
     {
-        var glassStyle = (Style)Resources["GlassButton"];
-        var activeStyle = (Style)Resources["ActiveToolButton"];
-        var parent = System.Windows.Media.VisualTreeHelper.GetParent(activeButton);
-        if (parent is not Panel toolPanel) return;
-        foreach (var child in toolPanel.Children)
+        _currentTool = tool;
+        var normalStyle = (Style)FindResource("ToolButton");
+        var activeStyle = (Style)FindResource("ToolButtonActive");
+        var toolName = tool.ToString();
+        foreach (var child in ToolButtonsPanel.Children)
         {
-            if (child is Button b && b.Tag is string)
+            if (child is Button b && b.Tag is string tag)
             {
-                b.Style = ReferenceEquals(b, activeButton) ? activeStyle : glassStyle;
+                b.Style = tag == toolName ? activeStyle : normalStyle;
             }
         }
     }
@@ -1842,10 +1840,12 @@ public partial class EditorWindow : Window
     
     private bool IsColorChangeableElement(UIElement element)
     {
-        // Pixelate rectangles have DrawingBrush and should not be color-changed
-        if (element is Rectangle rect && rect.Fill is DrawingBrush)
+        // Pixelate rectangles render an ImageBrush of the underlying pixels; recolouring them
+        // makes no sense and would just paint a visible stroke. (Detect via tag — the fill is
+        // an ImageBrush, not a DrawingBrush, so a brush-type check doesn't identify them.)
+        if (element is Rectangle { Tag: PixelateTag })
             return false;
-            
+
         return element is Shape || element is TextBlock;
     }
 
@@ -1921,7 +1921,7 @@ public partial class EditorWindow : Window
             _numberCounter = 1;
 
             // Reset to cursor tool
-            _currentTool = AnnotationTool.Cursor;
+            SelectTool(AnnotationTool.Cursor);
             _undo.Push(new UndoController.CropUndoAction(previousImage, previousElements, previousNumberCounter));
         }
         catch (Exception ex)
@@ -1937,12 +1937,18 @@ public partial class EditorWindow : Window
         try
         {
             var finalImage = CaptureCanvasAsImage();
-            
+
+            // Honour the user's configured save folder and default format — previously the
+            // dialog always opened wherever Windows last left it, defaulting to PNG.
+            var settings = new SettingsService().LoadSettings();
+            var defaultFormat = settings.DefaultFileFormat.ToUpperInvariant();
             var saveDialog = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "PNG Image|*.png|JPEG Image|*.jpg|Bitmap Image|*.bmp",
-                DefaultExt = ".png",
-                FileName = _saveService.GenerateFileName("PNG")
+                FilterIndex = defaultFormat switch { "JPG" or "JPEG" => 2, "BMP" => 3, _ => 1 },
+                DefaultExt = defaultFormat switch { "JPG" or "JPEG" => ".jpg", "BMP" => ".bmp", _ => ".png" },
+                InitialDirectory = settings.DefaultSavePath,
+                FileName = _saveService.GenerateFileName(settings.DefaultFileFormat)
             };
 
             if (saveDialog.ShowDialog() == true)
@@ -2015,6 +2021,10 @@ public partial class EditorWindow : Window
     {
         ZoomTransform.ScaleX = _zoomLevel;
         ZoomTransform.ScaleY = _zoomLevel;
+        if (ZoomLevelLabel != null)
+        {
+            ZoomLevelLabel.Text = $"{Math.Round(_zoomLevel * 100)}%";
+        }
     }
 
     private BitmapSource CaptureCanvasAsImage() =>
@@ -2051,21 +2061,15 @@ public partial class EditorWindow : Window
         if (WindowState == WindowState.Maximized)
         {
             WindowState = WindowState.Normal;
-            if (MaximizeRestoreButton != null)
-            {
-                MaximizeRestoreButton.Content = "🗖";
-            }
+            MaximizeRestoreIcon.Data = (Geometry)FindResource("Icon.WindowMaximize");
         }
         else
         {
             WindowState = WindowState.Maximized;
-            if (MaximizeRestoreButton != null)
-            {
-                MaximizeRestoreButton.Content = "🗗";
-            }
+            MaximizeRestoreIcon.Data = (Geometry)FindResource("Icon.WindowRestore");
         }
     }
-    
+
     private void Close_Click(object sender, RoutedEventArgs e)
     {
         Close();

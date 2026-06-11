@@ -10,6 +10,19 @@ public class SettingsServiceTests
     private static readonly string MyPictures =
         Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
 
+    [Theory]
+    [InlineData(-5, 0)]
+    [InlineData(0, 0)]
+    [InlineData(50, 50)]
+    [InlineData(500, 500)]
+    [InlineData(100_000, 500)]
+    public void HistoryRetentionCount_IsClampedToUiRange(int input, int expected)
+    {
+        var settings = new AppSettings { HistoryRetentionCount = input };
+        var sanitized = SettingsService.ValidateAndSanitizeSettings(settings);
+        Assert.Equal(expected, sanitized.HistoryRetentionCount);
+    }
+
     [Fact]
     public void EmptyDefaultSavePath_FallsBackToMyPictures()
     {

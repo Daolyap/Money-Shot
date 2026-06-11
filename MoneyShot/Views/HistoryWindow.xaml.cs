@@ -49,7 +49,7 @@ public partial class HistoryWindow : Window
         var meta = new TextBlock
         {
             Text = $"{entry.CapturedAt:yyyy-MM-dd HH:mm:ss}\n{entry.Width}×{entry.Height} · {entry.Source}",
-            Foreground = new SolidColorBrush(Color.FromRgb(0xCB, 0xD5, 0xE1)),
+            Foreground = (Brush)FindResource("Cocoa.TextSecondaryBrush"),
             FontSize = 11,
             Margin = new Thickness(0, 6, 0, 0),
             TextWrapping = TextWrapping.Wrap,
@@ -83,7 +83,7 @@ public partial class HistoryWindow : Window
         copyItem.Click += (_, _) => CopyToClipboard(entry);
         menu.Items.Add(copyItem);
 
-        menu.Items.Add(new Separator());
+        menu.Items.Add(new Separator { Style = (Style)FindResource("CocoaMenuSeparator") });
 
         var deleteItem = new MenuItem { Header = "Delete" };
         deleteItem.Click += (_, _) =>
@@ -112,8 +112,17 @@ public partial class HistoryWindow : Window
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        var editor = new EditorWindow(image);
-        editor.ShowDialog();
+        try
+        {
+            var editor = new EditorWindow(image);
+            editor.ShowDialog();
+        }
+        finally
+        {
+            // Same working-set trim the capture flow does — without it, opening a capture from
+            // history left hundreds of MB of bitmap backings resident after the editor closed.
+            MemoryTrimmer.TrimAfterEditorClose();
+        }
     }
 
     private void CopyToClipboard(HistoryEntry entry)
@@ -145,4 +154,22 @@ public partial class HistoryWindow : Window
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Minimize_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 1) return;
+        try
+        {
+            DragMove();
+        }
+        catch (InvalidOperationException)
+        {
+            // DragMove throws if the mouse is released before the drag starts.
+        }
+    }
 }

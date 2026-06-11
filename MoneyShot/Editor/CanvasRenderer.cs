@@ -52,56 +52,86 @@ internal static class CanvasRenderer
     }
 
     /// <summary>
-    /// Builds an ImageBrush whose contents are a downsampled version of the area beneath the
+    /// Builds an ImageBrush whose contents are a block-averaged version of the area beneath the
     /// supplied rectangle, producing the classic "censor bar" pixelation effect.
+    ///
+    /// Performance note: the previous implementation rendered the ENTIRE screenshot into a
+    /// RenderTargetBitmap (~33 MB at 4K) and allocated a CroppedBitmap per block. This version
+    /// copies only the covered region once and averages blocks in that single buffer, which is
+    /// both faster on mouse-up and a large RAM saving.
     /// </summary>
     public static Brush CreatePixelatedBrush(Rectangle pixelateRect, BitmapSource originalImage)
     {
-        var left = CanvasPosition.GetLeft(pixelateRect);
-        var top = CanvasPosition.GetTop(pixelateRect);
-
+        var left = (int)Math.Round(CanvasPosition.GetLeft(pixelateRect));
+        var top = (int)Math.Round(CanvasPosition.GetTop(pixelateRect));
         var width = (int)pixelateRect.Width;
         var height = (int)pixelateRect.Height;
         if (width <= 0 || height <= 0) return pixelateRect.Fill;
 
         try
         {
-            var renderBitmap = new RenderTargetBitmap(originalImage.PixelWidth, originalImage.PixelHeight, RenderDpi, RenderDpi, PixelFormats.Pbgra32);
-            var visual = new DrawingVisual();
-            using (var dc = visual.RenderOpen())
-            {
-                dc.DrawImage(originalImage, new Rect(0, 0, originalImage.PixelWidth, originalImage.PixelHeight));
-            }
-            renderBitmap.Render(visual);
+            // Clamp the sampled region to the image; the brush stretches to the rect, so a
+            // rectangle that hangs off the image edge still gets full coverage.
+            var srcX = Math.Max(0, Math.Min(left, originalImage.PixelWidth - 1));
+            var srcY = Math.Max(0, Math.Min(top, originalImage.PixelHeight - 1));
+            var srcW = Math.Min(width, originalImage.PixelWidth - srcX);
+            var srcH = Math.Min(height, originalImage.PixelHeight - srcY);
+            if (srcW <= 0 || srcH <= 0) return pixelateRect.Fill;
 
-            var pixelatedBitmap = new RenderTargetBitmap(width, height, RenderDpi, RenderDpi, PixelFormats.Pbgra32);
-            var drawingVisual = new DrawingVisual();
-            using (var drawingContext = drawingVisual.RenderOpen())
+            BitmapSource source = originalImage.Format == PixelFormats.Bgra32 || originalImage.Format == PixelFormats.Pbgra32
+                ? originalImage
+                : new FormatConvertedBitmap(originalImage, PixelFormats.Bgra32, null, 0);
+
+            var stride = srcW * 4;
+            var pixels = new byte[stride * srcH];
+            source.CopyPixels(new Int32Rect(srcX, srcY, srcW, srcH), pixels, stride, 0);
+
+            // Average each block, then write the averaged colour back over the block's pixels.
+            for (var blockTop = 0; blockTop < srcH; blockTop += PixelateBlockSize)
             {
-                for (int y = 0; y < height; y += PixelateBlockSize)
+                var blockH = Math.Min(PixelateBlockSize, srcH - blockTop);
+                for (var blockLeft = 0; blockLeft < srcW; blockLeft += PixelateBlockSize)
                 {
-                    for (int x = 0; x < width; x += PixelateBlockSize)
+                    var blockW = Math.Min(PixelateBlockSize, srcW - blockLeft);
+
+                    long sumB = 0, sumG = 0, sumR = 0;
+                    for (var y = 0; y < blockH; y++)
                     {
-                        var blockWidth = Math.Min(PixelateBlockSize, width - x);
-                        var blockHeight = Math.Min(PixelateBlockSize, height - y);
+                        var offset = (blockTop + y) * stride + blockLeft * 4;
+                        for (var x = 0; x < blockW; x++)
+                        {
+                            sumB += pixels[offset];
+                            sumG += pixels[offset + 1];
+                            sumR += pixels[offset + 2];
+                            offset += 4;
+                        }
+                    }
 
-                        var sampleX = (int)(left + x + blockWidth / 2);
-                        var sampleY = (int)(top + y + blockHeight / 2);
-                        sampleX = Math.Max(0, Math.Min(sampleX, originalImage.PixelWidth - 1));
-                        sampleY = Math.Max(0, Math.Min(sampleY, originalImage.PixelHeight - 1));
+                    var count = blockW * blockH;
+                    var b = (byte)(sumB / count);
+                    var g = (byte)(sumG / count);
+                    var r = (byte)(sumR / count);
 
-                        var croppedBitmap = new CroppedBitmap(renderBitmap, new Int32Rect(sampleX, sampleY, 1, 1));
-                        var pixels = new byte[4];
-                        croppedBitmap.CopyPixels(pixels, 4, 0);
-
-                        var color = Color.FromArgb(pixels[3], pixels[2], pixels[1], pixels[0]);
-                        drawingContext.DrawRectangle(new SolidColorBrush(color), null, new Rect(x, y, blockWidth, blockHeight));
+                    for (var y = 0; y < blockH; y++)
+                    {
+                        var offset = (blockTop + y) * stride + blockLeft * 4;
+                        for (var x = 0; x < blockW; x++)
+                        {
+                            pixels[offset] = b;
+                            pixels[offset + 1] = g;
+                            pixels[offset + 2] = r;
+                            pixels[offset + 3] = 0xFF;
+                            offset += 4;
+                        }
                     }
                 }
             }
-            pixelatedBitmap.Render(drawingVisual);
 
-            return new ImageBrush(pixelatedBitmap) { Stretch = Stretch.Fill };
+            var pixelated = BitmapSource.Create(srcW, srcH, RenderDpi, RenderDpi, PixelFormats.Bgra32, null, pixels, stride);
+            pixelated.Freeze();
+            var brush = new ImageBrush(pixelated) { Stretch = Stretch.Fill };
+            brush.Freeze();
+            return brush;
         }
         catch (ArgumentException)
         {

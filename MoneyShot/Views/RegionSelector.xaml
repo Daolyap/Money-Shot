@@ -1,13 +1,30 @@
 <Window x:Class="MoneyShot.Views.RegionSelector"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Select Region" 
+        Title="Select Region"
+        Background="Black"
         MouseDown="Window_MouseDown"
         MouseMove="Window_MouseMove"
         MouseUp="Window_MouseUp"
         KeyDown="Window_KeyDown">
     <Grid>
         <Image Name="BackgroundImage" Stretch="Fill"/>
+        <!-- Dims everything outside the active selection. Geometry is updated from code-behind;
+             before a drag starts it covers the whole surface. -->
+        <Path Name="DimOverlay" Fill="#5C000000" IsHitTestVisible="False"/>
         <Canvas Name="SelectionCanvas"/>
+        <!-- Instruction hint, hidden once the user starts dragging. -->
+        <Border Name="HintBadge" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,28,0,0" Background="#D8221A13" BorderBrush="#C28E5C" BorderThickness="1"
+                CornerRadius="6" Padding="14,8" IsHitTestVisible="False">
+            <TextBlock Text="Drag to select a region  ·  Esc to cancel"
+                       Foreground="#F1E9DE" FontFamily="Segoe UI" FontSize="13"/>
+        </Border>
+        <!-- Live dimensions badge that follows the selection. -->
+        <Border Name="SizeBadge" HorizontalAlignment="Left" VerticalAlignment="Top"
+                Background="#D8221A13" BorderBrush="#C28E5C" BorderThickness="1"
+                CornerRadius="4" Padding="8,3" Visibility="Collapsed" IsHitTestVisible="False">
+            <TextBlock Name="SizeBadgeText" Foreground="#F1E9DE" FontFamily="Segoe UI" FontSize="12"/>
+        </Border>
     </Grid>
 </Window>
