@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using MoneyShot.Services;
 using MoneyShot.Views;
@@ -37,27 +38,40 @@ public partial class MainWindow : Window
         _historyService = new HistoryService();
 
         SetupSystemTray();
-        Loaded += MainWindow_Loaded;
     }
 
-    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Performs post-construction startup: realizes the native handle, binds global hotkeys, and
+    /// shows the window only when the user hasn't opted to start in the tray. Called once from
+    /// <see cref="App.OnStartup"/>. When <see cref="Models.AppSettings.StartInTray"/> is set the
+    /// window is never shown — <see cref="WindowInteropHelper.EnsureHandle"/> creates the HWND that
+    /// hotkey registration needs without painting anything, which avoids the black-frame flash that
+    /// Show()-then-Hide() produced.
+    /// </summary>
+    public void InitializeApplication()
     {
         try
         {
+            var settings = _settingsService.LoadSettings();
+
+            if (settings.StartInTray)
+            {
+                // Realize the Win32 handle without making the window visible.
+                new WindowInteropHelper(this).EnsureHandle();
+            }
+            else
+            {
+                ShowMainWindow();
+            }
+
+            // The HWND now exists (via EnsureHandle or Show), so global hotkeys can bind to it.
             _hotKeyService.Initialize(this);
             RegisterHotKeys();
             PopulateMonitorButtons();
-            
-            // Check if app should start in tray
-            var settings = _settingsService.LoadSettings();
-            if (settings.StartInTray)
-            {
-                Hide();
-            }
 
             if (settings.CheckForUpdatesOnStartup)
             {
-                await CheckForUpdatesOnStartupAsync();
+                _ = CheckForUpdatesOnStartupAsync();
             }
         }
         catch (Exception ex)
