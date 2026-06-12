@@ -32,6 +32,14 @@ public partial class App : Application
         }
 
         base.OnStartup(e);
+
+        // StartupUri is intentionally not used. It calls Show() during startup, which paints an
+        // unrendered (black) frame before the Loaded handler can hide it when StartInTray is set.
+        // Instead we create the window here and let InitializeApplication decide whether to show
+        // it or just realize its handle for hotkeys — see MainWindow.InitializeApplication.
+        var mainWindow = new MainWindow();
+        MainWindow = mainWindow;
+        mainWindow.InitializeApplication();
     }
 
     protected override void OnExit(ExitEventArgs e)
