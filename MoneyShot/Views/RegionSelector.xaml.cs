@@ -15,6 +15,7 @@ public partial class RegionSelector : Window
     private bool _isSelecting;
     private int _virtualScreenLeft;
     private int _virtualScreenTop;
+    private double _creationDpiScale = 1.0;
     private readonly BitmapSource _frozenScreen;
 
     public DrawingRectangle? SelectedRegion { get; private set; }
@@ -46,6 +47,14 @@ public partial class RegionSelector : Window
         _virtualScreenLeft = minX;
         _virtualScreenTop = minY;
 
+        // WPF interprets Left/Top/Width/Height as DIPs, but minX/minY/maxX/maxY above are
+        // physical pixels (WinForms Screen API). Before the HWND exists WPF has no
+        // window-specific DPI to consult, so approximate with the process's system DPI, which
+        // for a Per-Monitor-V2-aware process tracks the primary monitor's effective DPI. This is
+        // a best-effort guess used only for sizing the overlay — the crop math in Window_MouseUp
+        // re-queries the window's actual runtime DPI rather than trusting this value.
+        _creationDpiScale = GetDpiForSystem() / 96.0;
+
         // Set window to cover all screens. Deliberately NOT AllowsTransparency: the frozen
         // screenshot fully covers the window, and a layered (transparent) window this size is
         // composed in software across every monitor — visibly laggy at 4K. The dimming effect
@@ -54,11 +63,11 @@ public partial class RegionSelector : Window
         ResizeMode = ResizeMode.NoResize;
         Topmost = true;
 
-        // Position and size to cover entire virtual screen
-        Left = minX;
-        Top = minY;
-        Width = maxX - minX;
-        Height = maxY - minY;
+        // Position and size to cover entire virtual screen (physical pixels converted to DIPs)
+        Left = minX / _creationDpiScale;
+        Top = minY / _creationDpiScale;
+        Width = (maxX - minX) / _creationDpiScale;
+        Height = (maxY - minY) / _creationDpiScale;
 
         Cursor = Cursors.Cross;
 
@@ -168,14 +177,27 @@ public partial class RegionSelector : Window
         {
             _isSelecting = false;
 
-            var x = (int)Canvas.GetLeft(_selectionRectangle);
-            var y = (int)Canvas.GetTop(_selectionRectangle);
-            var width = (int)_selectionRectangle.Width;
-            var height = (int)_selectionRectangle.Height;
+            // Canvas coordinates are in DIPs. Keep them as doubles until the final physical-pixel
+            // conversion below — rounding to int here first and scaling afterward would compound
+            // rounding error by the DPI factor.
+            var dipX = Canvas.GetLeft(_selectionRectangle);
+            var dipY = Canvas.GetTop(_selectionRectangle);
+            var dipWidth = _selectionRectangle.Width;
+            var dipHeight = _selectionRectangle.Height;
 
-            if (width > 10 && height > 10)
+            if (dipWidth > 10 && dipHeight > 10)
             {
-                // Adjust coordinates to account for virtual screen offset
+                // Query the window's actual current DPI fresh, rather than reusing the
+                // construction-time _creationDpiScale guess. This is correct even if WPF
+                // auto-migrated the window to a different DPI context (WM_DPICHANGED) between
+                // construction and this mouse-up.
+                var dpi = VisualTreeHelper.GetDpi(this);
+                var x = (int)Math.Round(dipX * dpi.DpiScaleX);
+                var y = (int)Math.Round(dipY * dpi.DpiScaleY);
+                var width = (int)Math.Round(dipWidth * dpi.DpiScaleX);
+                var height = (int)Math.Round(dipHeight * dpi.DpiScaleY);
+
+                // Adjust coordinates to account for virtual screen offset (both now physical pixels)
                 // The canvas is positioned relative to the window, which starts at virtual screen origin
                 var absoluteX = x + _virtualScreenLeft;
                 var absoluteY = y + _virtualScreenTop;
@@ -227,4 +249,7 @@ public partial class RegionSelector : Window
             Close();
         }
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForSystem();
 }
