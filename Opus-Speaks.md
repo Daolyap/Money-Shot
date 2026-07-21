@@ -67,11 +67,13 @@ SHA-256 verification protects against tampering between GitHub Releases and the 
 >
 > Until this lands, the SHA-256 check is the only integrity guarantee — that's still meaningfully better than nothing.
 
-## E2. Region selector is only pixel-accurate at 100 % display scaling
+## E2. Region selector is only pixel-accurate at 100 % display scaling (resolved 2026-07)
 
-Found during the 2026-06 security/code audit. The app manifest declares `PerMonitorV2` DPI awareness, but `RegionSelector` sets its window `Width`/`Height` (DIPs) directly from physical pixel bounds and maps mouse DIP positions 1:1 onto frozen-bitmap pixel coordinates. At 100 % scaling DIP == pixel and everything lines up; at 125 %/150 % (or mixed-DPI multi-monitor) the window oversizes and crops drift.
+Found during the 2026-06 security/code audit. The app manifest declares `PerMonitorV2` DPI awareness, but `RegionSelector` set its window `Width`/`Height` (DIPs) directly from physical pixel bounds and mapped mouse DIP positions 1:1 onto frozen-bitmap pixel coordinates. At 100 % scaling DIP == pixel and everything lined up; at 125 %/150 % (or mixed-DPI multi-monitor) the window oversized and crops drifted.
 
-> Fixing this properly needs one selector window per monitor (each in its own DPI context) or explicit `CompositionTarget.TransformToDevice` math when converting selection rects to bitmap pixels. The mixed-DPI virtual-screen mapping is nonlinear — don't try to patch it with a single global scale factor.
+Fixed with the single-window approach: `SetupFullScreenOverlay` now divides the physical-pixel virtual-screen bounds by `GetDpiForSystem() / 96.0` (a P/Invoke best-effort guess, since no per-window DPI exists before the HWND is created) before assigning `Left`/`Top`/`Width`/`Height`. `Window_MouseUp` re-queries the window's *actual* live DPI via `VisualTreeHelper.GetDpi(this)` at crop time — correct even if WPF's automatic `WM_DPICHANGED` handling migrated the window to a different DPI context after construction — and converts the DIP-space selection rectangle to physical pixels with that fresh value before combining it with the physical-pixel virtual-screen offset.
+
+**Accepted residual limitation**: a single drag that starts on one monitor and ends on another monitor with a *different* scaling percentage can still be slightly imprecise on the non-dominant side — a WPF window only has one DPI context at a time, so this can't be fully correct without one selector window per monitor (each in its own DPI context, with the drag tracked in physical pixels across window boundaries via native mouse capture). That's a substantially bigger change with no automated UI tests to catch regressions; deliberately out of scope unless this specific case becomes a reported problem.
 
 ## E3. Auto-update can't swap a per-machine install
 
