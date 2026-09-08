@@ -1784,7 +1784,10 @@ public partial class EditorWindow : Window
         catch (Exception ex)
         {
             await SimpleMessageBox.ShowAsync(this, $"Failed to apply crop: {ex.Message}", "Crop Error");
-            DrawingCanvas.Children.Remove(_cropRectangle);
+            // Non-null here: the "if (_cropRectangle == null) return;" guard above the try block
+            // means we can only reach this catch with a non-null value (nothing in the try
+            // reassigns it before a possible throw).
+            DrawingCanvas.Children.Remove(_cropRectangle!);
             _cropRectangle = null;
         }
     }

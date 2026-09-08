@@ -58,11 +58,16 @@ public sealed class HistoryService
                 ThumbnailFileName = $"{id}-thumb.png",
             };
 
+            // Save(string) is the only overload for "just encode PNG, default settings" — its
+            // replacement (a BitmapEncoderOptions overload) isn't otherwise needed since history
+            // is always plain PNG regardless of the user's chosen save format.
+#pragma warning disable CS0618
             image.Save(Path.Combine(_historyDirectory, entry.ImageFileName));
             using (var thumbnail = CreateThumbnail(image))
             {
                 thumbnail.Save(Path.Combine(_historyDirectory, entry.ThumbnailFileName));
             }
+#pragma warning restore CS0618
             File.WriteAllText(
                 Path.Combine(_historyDirectory, $"{id}.json"),
                 JsonSerializer.Serialize(entry, JsonOptions));

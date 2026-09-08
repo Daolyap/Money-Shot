@@ -51,7 +51,12 @@ public static class BitmapConversions
         else
         {
             using var stream = new System.IO.MemoryStream();
+            // Save(Stream) is the only overload for "just encode PNG, default settings" — its
+            // replacement (a BitmapEncoderOptions overload) isn't otherwise needed here since we
+            // want the default encoding anyway.
+#pragma warning disable CS0618
             bitmap.Save(stream);
+#pragma warning restore CS0618
             stream.Position = 0;
             writeable = WriteableBitmap.Decode(stream);
             ownsWriteable = true;
