@@ -13,7 +13,7 @@ namespace MoneyShot.Services;
 /// + DI throughout. The actual gap was "Debug.WriteLine produces no Release output", and a
 /// 100-line static facade closes that gap without rewriting every service's constructor.
 /// </summary>
-internal static class Logger
+public static class Logger
 {
     private const int RetentionDays = 7;
     private const string FileNameFormat = "moneyshot-{0:yyyyMMdd}.log";

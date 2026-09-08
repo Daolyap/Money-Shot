@@ -404,20 +404,20 @@ public sealed class AutoUpdateService
         return $"""
         @echo off
         setlocal
-        
+
         set "TARGET={escapedTargetPath}"
         set "STAGED={escapedStagedPath}"
-        
+
         :WAIT_LOOP
         tasklist /FI "IMAGENAME eq {escapedTargetExecutableName}" 2>NUL | find /I "{escapedTargetExecutableName}" >NUL
         if not errorlevel 1 (
             timeout /T 1 /NOBREAK >NUL
             goto WAIT_LOOP
         )
-        
+
         move /Y "%STAGED%" "%TARGET%"
         if errorlevel 1 exit /B 1
-        
+
         start "" "%TARGET%"
         (goto) 2>nul & del "%~f0"
         """;
@@ -432,11 +432,11 @@ public sealed class AutoUpdateService
         #!/bin/sh
         TARGET={escapedTargetPath}
         STAGED={escapedStagedPath}
-        
+
         while pgrep -f "$TARGET" >/dev/null 2>&1; do
           sleep 1
         done
-        
+
         mv -f "$STAGED" "$TARGET"
         chmod +x "$TARGET"
         "$TARGET" >/dev/null 2>&1 &

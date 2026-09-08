@@ -1,7 +1,14 @@
 # Linux Port — Feasibility & Plan
 
-> Status: planning document, not a commitment. Captures the technical reality of porting MoneyShot
-> off WPF/Windows so the team can decide whether the cost is worth the user base.
+> Status: **Phase 0 shipped** (2026-09). **Phase 1 built and partially verified** (2026-09) — a
+> full Avalonia port of every window exists as a new, additive `MoneyShot.UI` project (the
+> shipping WPF app/installer is untouched). It builds clean and `MainWindow` has been confirmed
+> working by actually running it and inspecting a screenshot — theme, custom title bar, buttons,
+> icons, and dynamic monitor detection all render correctly. **The other four windows have not
+> been interactively tested** — see § Phase 1 status for exactly what is and isn't verified before
+> anyone relies on this build. Phases 2–4 (X11/Wayland platform code, packaging) are not started
+> and remain a planning-only commitment for the team to weigh — see § Migration phases and §
+> Decision matrix for the team.
 
 ## TL;DR
 
@@ -211,18 +218,100 @@ A `PlatformServices.Resolve()` static returns the right implementations based on
 
 ## Migration phases
 
-**Phase 0 — extraction (no behavior change, Windows-only).** Pull `IScreenCapture`,
-`IGlobalHotkeys`, etc. interfaces out of the existing concrete services. Keep WPF, keep all
-existing tests green. ~1 week.
+**Phase 0 — extraction (no behavior change, Windows-only). ✅ Done (2026-09).** Pulled
+`IScreenCapture`, `IGlobalHotkeys`, `ITrayIcon`, `IAutoStart`, `IClipboard` out into a new
+`MoneyShot.Core` project (no UI/Windows dependency) plus a `MoneyShot.Platform.Windows` project
+holding the Win32/WinForms implementations (`Win32ScreenCapture`, `Win32GlobalHotkeys`,
+`Win32TrayIcon`, `Win32AutoStart`, `Win32Clipboard`). WPF stayed exactly as-is behaviorally; all
+109 tests stayed green throughout. Two implementation notes for whoever picks up Phase 1:
 
-**Phase 1 — UI port to Avalonia, still Windows-only.** Move `MainWindow`, `EditorWindow`,
-`HistoryWindow`, `RegionSelector`, `SettingsWindow` to `*.axaml`. Use Avalonia's `Canvas`/`Shape`
-hierarchy — it tracks WPF closely enough that the editor's drawing/hit-test/resize logic is
-mostly find-and-replace. Re-prove all 95 existing tests pass. The output here is a
-*Windows-only Avalonia build* that behaves like today's MoneyShot. **2–3 weeks.** This is the
-biggest single chunk and the highest-risk one — if Avalonia turns out to have a blocker (e.g. its
-`RenderTargetBitmap` doesn't behave like WPF's for the pixelate brush), this is where we find
-out.
+- `IScreenCapture` returns a neutral `CapturedImage` (raw BGRA32 pixel buffer) rather than a WPF
+  `BitmapSource`, converted at the UI boundary via `MoneyShot/Interop/BitmapConversions.cs`. As a
+  side effect this also eliminated the old HBITMAP-handle-leak risk (`Win32ScreenCapture` reads
+  pixels via `Bitmap.LockBits` instead of `GetHbitmap`/`DeleteObject`).
+- `Win32GlobalHotkeys` hooks `WM_HOTKEY` by subclassing the given HWND with a WinForms
+  `NativeWindow` (`AssignHandle`) rather than WPF's `HwndSource.AddHook` — this keeps
+  `MoneyShot.Platform.Windows` free of any WPF reference, so the same class should keep working
+  once Phase 1 replaces the UI layer with Avalonia. This is a different mechanism than what was
+  running before and hasn't been through real-world hotkey testing beyond a clean build — verify
+  hotkeys (PrintScreen, Ctrl+PrintScreen, Ctrl+Shift+1..9) actually fire on real Windows hardware
+  before trusting this in the field, the same way any other change in this codebase touching
+  `EditorWindow`/`HistoryWindow`/the tray menu needs manual verification (no automated UI
+  coverage — see `CLAUDE.md`).
+
+`HistoryService` and `SaveService` deliberately stayed WPF/`BitmapSource`-based rather than being
+forced into Core — they're squarely a Phase 1 (UI-port) concern per the "What ports cleanly" table
+above, and abstracting them now would have meant designing around a UI framework (Avalonia) that
+isn't actually in the dependency tree yet. `SaveService` does now take an `IClipboard` so its
+clipboard write goes through the platform abstraction; file saving is unchanged.
+
+**Phase 1 — UI port to Avalonia, still Windows-only. 🟡 Built, partially verified (2026-09).**
+`MainWindow`, `EditorWindow`, `HistoryWindow`, `RegionSelector`, `SettingsWindow` were all ported
+to `*.axaml` in a new, additive `MoneyShot.UI` project (net10.0-windows for now — see below) that
+sits alongside the shipping WPF app without touching it. `CocoaTheme.axaml` re-implements the WPF
+theme using Avalonia's `ControlTheme` system. All 109 existing tests still pass (the WPF/Core
+test suite; `MoneyShot.UI` itself has no tests, same as WPF's views). No blocker was hit in
+Avalonia's `Geometry.FillContains`/`StrokeContains` (used for arrow hit-testing) or
+`RenderTargetBitmap` (used for the pixelate brush and final image capture) — both have close WPF
+equivalents and the project compiles clean using them.
+
+*What's actually verified, and how:* the whole solution builds with zero errors/warnings, the
+Avalonia build launches and stays responsive (checked via process inspection), and `MainWindow`
+was confirmed **visually correct by actually running it and inspecting a screenshot** — the
+cocoa-brown theme, custom borderless title bar with working minimize/maximize/close, the accent
+capture buttons, icon rendering, and the dynamically-generated per-monitor button list (correctly
+detected 3 monitors and labeled the primary) all render as designed.
+
+*What is NOT verified* — this was built and made to compile, but nobody has clicked through it:
+- `EditorWindow` is the highest-risk file in the entire port (2000+ lines, the most stateful
+  mouse-interaction code in the app — see CLAUDE.md's "Resize/drag" notes on past WPF regressions
+  in this exact logic). None of drawing, selecting, dragging, resizing (box or endpoint), undo,
+  crop, zoom/pan, pixelate, or the async save/color/text dialogs have been interactively tested.
+- `SettingsWindow`, `HistoryWindow`, `RegionSelector` compile but haven't been opened.
+- Global hotkeys, the tray icon and its context menu, and the actual capture-to-editor flow have
+  not been triggered end-to-end.
+- A thin sliver of residual native chrome was visible above the custom title bar in the one
+  screenshot taken — likely related to Avalonia 12's `ExtendClientAreaChromeHints` removal (see
+  implementation note below); cosmetic, not investigated further.
+
+None of this was possible to close out further in the session that built it — no computer-use/UI
+automation tooling was available to click through the app, only process inspection and one
+manually-captured screenshot. **Manual interactive testing of the above is required before trusting
+this build for anything beyond "it starts and MainWindow looks right."**
+
+Implementation notes for whoever continues from here:
+- `MoneyShot.UI` targets `net10.0-windows`, not the bare `net10.0` the architecture diagram above
+  implies for the long-term target — a plain `net10.0` project cannot reference a
+  `net10.0-windows` one (`MoneyShot.Platform.Windows`) at all, TFM compatibility requires the
+  consumer to be equal-or-more-specific. It becomes genuinely cross-platform (multi-targeting, or
+  a runtime `OperatingSystem.IsWindows()` check instead of a compile-time project reference) once
+  Phase 2 adds `MoneyShot.Platform.Linux`.
+- **Avalonia 12 removed `Window.ExtendClientAreaChromeHints`** (present through 11.x, used for
+  WPF-style `WindowChrome`-equivalent borderless-with-shadow windows) in favor of
+  `WindowDecorations="None"` + `ExtendClientAreaToDecorationsHint="True"`. This build uses the
+  new API since it targets Avalonia 12.1.2, but Avalonia's own tracking issue (#21212) notes the
+  old approach's DWM min/max/close animations and window shadow are not fully replicated by the
+  new one on Windows — expect this build's windows to look slightly flatter (no drop shadow) than
+  the WPF build's, and verify resize-by-dragging-the-edge actually still works (not verified here).
+- `IGlobalHotkeys.Initialize()` (in `MoneyShot.Core`/`Win32GlobalHotkeys`) was changed during this
+  work to take no window-handle argument — it now creates its own message-only Win32 window
+  (`HWND_MESSAGE`) rather than subclassing the app's main window. This was necessary because the
+  Avalonia build can start with no window ever created (`StartInTray`) and there's no confirmed
+  Avalonia equivalent of WPF's `WindowInteropHelper.EnsureHandle()` for realizing a handle without
+  showing anything. The WPF build was updated to match (`MainWindow.InitializeApplication()` no
+  longer needs `EnsureHandle()` either) — this is a genuine simplification, not just a Phase-1
+  accommodation.
+- WPF's `Microsoft.Win32.SaveFileDialog` (sync) became Avalonia's `IStorageProvider.SaveFilePickerAsync`
+  (async) — `EditorWindow.Save_Click` and everywhere else a blocking `MessageBox.Show` existed
+  became `async`/`await SimpleMessageBox.ShowAsync` (a hand-rolled modal window — Avalonia has no
+  built-in `MessageBox`).
+- Avalonia's own `Bitmap.Save` is PNG-only regardless of requested format (a known framework
+  limitation, see AvaloniaUI/Avalonia#12493) — `MoneyShot.UI.Services.SaveService` uses SkiaSharp
+  directly (already an Avalonia dependency, referenced explicitly) to encode real JPEG/BMP.
+- `RegionSelector`'s DPI handling was ported from the *already-fixed* WPF version (see § E2 in
+  Opus-Speaks.md), not the original buggy one — and is arguably cleaner here, since Avalonia's
+  `Screens` API exposes each monitor's scale factor directly (`Screen.Scaling`), avoiding the
+  Win32 `GetDpiForMonitor` P/Invoke the WPF fix needed.
 
 **Phase 2 — Linux platform implementations.** X11 capture, X11 hotkeys, Linux autostart, Linux
 clipboard, Linux tray. Test on at least: Ubuntu 24.04 + KDE Plasma 6, Fedora + GNOME, Arch + i3.

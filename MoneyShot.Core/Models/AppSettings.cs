@@ -1,6 +1,3 @@
-using System.Windows;
-using System.Windows.Media;
-
 namespace MoneyShot.Models;
 
 public class AppSettings
@@ -14,7 +11,18 @@ public class AppSettings
     public bool DisableWindowsPrintScreen { get; set; } = false;
     public bool HideUiFromScreenshots { get; set; } = true;
     public bool CheckForUpdatesOnStartup { get; set; } = true;
-    public Color DefaultAnnotationColor { get; set; } = Colors.Red;
+
+    /// <summary>
+    /// Packed 0xAARRGGBB. Platform-neutral replacement for the old WPF-typed
+    /// <c>System.Windows.Media.Color DefaultAnnotationColor</c> field, so this project has no UI
+    /// framework dependency (part of the Linux-port groundwork — see LINUX_PORT.md Phase 0). Named
+    /// differently from the old field so a settings.json written by a pre-port build (which
+    /// serialized a WPF Color's full field set) is simply ignored as an unknown property rather
+    /// than causing a whole-file JSON deserialization failure. UI layers convert to/from their own
+    /// native color type at the boundary — see MoneyShot's ArgbColorConversions.
+    /// </summary>
+    public uint DefaultAnnotationColorArgb { get; set; } = 0xFFFF0000; // opaque red
+
     public int DefaultLineThickness { get; set; } = 3;
     public string HotKeyCapture { get; set; } = "PrintScreen";
     public string HotKeyRegionCapture { get; set; } = "Ctrl+PrintScreen";

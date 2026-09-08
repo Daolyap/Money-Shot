@@ -1,11 +1,20 @@
-using System.Drawing.Imaging;
+using System;
 using System.IO;
-using System.Windows.Media.Imaging;
+using Avalonia.Media.Imaging;
 using MoneyShot.Abstractions;
-using MoneyShot.Interop;
+using MoneyShot.Models;
+using MoneyShot.UI.Interop;
+using SkiaSharp;
+using Logger = MoneyShot.Services.Logger;
 
-namespace MoneyShot.Services;
+namespace MoneyShot.UI.Services;
 
+/// <summary>
+/// Avalonia twin of MoneyShot/Services/SaveService.cs (WPF) — see LINUX_PORT.md Phase 1. Same
+/// shape and same file-path validation logic (copied verbatim, it's pure and platform-neutral);
+/// the WPF BitmapEncoder family is replaced with SkiaSharp encoding of the CapturedImage pixel
+/// buffer, since Avalonia's own Bitmap.Save is PNG-only regardless of requested format.
+/// </summary>
 public class SaveService
 {
     private readonly IClipboard _clipboard;
@@ -15,13 +24,10 @@ public class SaveService
         _clipboard = clipboard;
     }
 
-    public void SaveToClipboard(BitmapSource image)
+    public void SaveToClipboard(Bitmap image)
     {
         try
         {
-            // Routed through IClipboard (Win32Clipboard on Windows today) rather than
-            // System.Windows.Clipboard directly, so this stays correct once the UI layer moves to
-            // Avalonia — see LINUX_PORT.md § Clipboard image support.
             _clipboard.SetImage(image.ToCapturedImage());
         }
         catch (Exception ex)
@@ -31,42 +37,52 @@ public class SaveService
         }
     }
 
-    public void SaveToFile(BitmapSource image, string filePath, string format = "PNG")
+    public void SaveToFile(Bitmap image, string filePath, string format = "PNG")
     {
-        // Validate the file path to prevent path traversal
         ValidateFilePath(filePath);
-        
+
         try
         {
-            BitmapEncoder encoder = format.ToUpper() switch
-            {
-                "PNG" => new PngBitmapEncoder(),
-                // Default JPEG quality (75) visibly smears text in screenshots; 90 keeps
-                // UI text legible at a still-reasonable file size.
-                "JPG" or "JPEG" => new JpegBitmapEncoder { QualityLevel = 90 },
-                "BMP" => new BmpBitmapEncoder(),
-                "GIF" => new GifBitmapEncoder(),
-                _ => new PngBitmapEncoder()
-            };
+            var captured = image.ToCapturedImage();
+            var info = new SKImageInfo(captured.Width, captured.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
 
-            encoder.Frames.Add(BitmapFrame.Create(image));
-
-            // Ensure directory exists
-            var directory = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            using var skBitmap = new SKBitmap();
+            var handle = System.Runtime.InteropServices.GCHandle.Alloc(captured.PixelDataBgra32, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try
             {
-                Directory.CreateDirectory(directory);
+                skBitmap.InstallPixels(info, handle.AddrOfPinnedObject(), captured.Stride);
+
+                var (skFormat, quality) = format.ToUpperInvariant() switch
+                {
+                    // Default JPEG quality (75) visibly smears text in screenshots; 90 keeps UI
+                    // text legible at a still-reasonable file size — matches the WPF build's choice.
+                    "JPG" or "JPEG" => (SKEncodedImageFormat.Jpeg, 90),
+                    "BMP" => (SKEncodedImageFormat.Bmp, 100),
+                    "GIF" => (SKEncodedImageFormat.Gif, 100),
+                    _ => (SKEncodedImageFormat.Png, 100)
+                };
+
+                var directory = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                using var data = skBitmap.Encode(skFormat, quality);
+                using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                data.SaveTo(fileStream);
             }
-
-            using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
-            encoder.Save(fileStream);
+            finally
+            {
+                handle.Free();
+            }
         }
         catch (UnauthorizedAccessException ex)
         {
             Logger.Error("Access denied when saving file", ex);
             throw new InvalidOperationException("Access denied. Check file permissions.", ex);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not InvalidOperationException)
         {
             Logger.Error("Error saving file", ex);
             throw new InvalidOperationException($"Failed to save image to file: {ex.Message}", ex);
@@ -76,30 +92,31 @@ public class SaveService
     public string GenerateFileName(string format = "PNG")
     {
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        return $"Screenshot_{timestamp}.{format.ToLower()}";
+        return $"Screenshot_{timestamp}.{format.ToLowerInvariant()}";
     }
 
-    public void SaveImage(BitmapSource image, Models.SaveDestination destination, string? filePath = null, string format = "PNG")
+    public void SaveImage(Bitmap image, SaveDestination destination, string? filePath = null, string format = "PNG")
     {
         switch (destination)
         {
-            case Models.SaveDestination.Clipboard:
+            case SaveDestination.Clipboard:
                 SaveToClipboard(image);
                 break;
-            case Models.SaveDestination.File:
+            case SaveDestination.File:
                 if (filePath != null)
                     SaveToFile(image, filePath, format);
                 break;
-            case Models.SaveDestination.Both:
+            case SaveDestination.Both:
                 SaveToClipboard(image);
                 if (filePath != null)
                     SaveToFile(image, filePath, format);
                 break;
         }
     }
-    
+
     /// <summary>
-    /// Validates file path to prevent path traversal and other security issues
+    /// Validates file path to prevent path traversal and other security issues. Copied verbatim
+    /// from the WPF SaveService — pure path logic, no UI-framework dependency.
     /// </summary>
     private void ValidateFilePath(string filePath)
     {
@@ -107,22 +124,18 @@ public class SaveService
         {
             throw new ArgumentException("File path cannot be empty.", nameof(filePath));
         }
-        
+
         try
         {
-            // Get the full path and ensure it's valid
             var fullPath = Path.GetFullPath(filePath);
-            
-            // Ensure the path is rooted (absolute)
+
             if (!Path.IsPathRooted(fullPath))
             {
                 throw new ArgumentException("Path must be absolute.", nameof(filePath));
             }
-            
-            // Get the directory path for additional validation
+
             var directory = Path.GetDirectoryName(fullPath);
-            
-            // Ensure we're not trying to write to a system directory
+
             var systemDirs = new[]
             {
                 Environment.GetFolderPath(Environment.SpecialFolder.System),
@@ -130,7 +143,7 @@ public class SaveService
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
             };
-            
+
             foreach (var sysDir in systemDirs)
             {
                 if (string.IsNullOrEmpty(sysDir) || string.IsNullOrEmpty(directory))
@@ -138,8 +151,6 @@ public class SaveService
                     continue;
                 }
 
-                // Compare with a trailing separator so "C:\Windows" blocks "C:\Windows\..."
-                // and "C:\Windows" itself, but not sibling folders like "C:\WindowsBackup".
                 var sysDirWithSeparator = Path.TrimEndingDirectorySeparator(sysDir) + Path.DirectorySeparatorChar;
                 var directoryWithSeparator = Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar;
                 if (directoryWithSeparator.StartsWith(sysDirWithSeparator, StringComparison.OrdinalIgnoreCase))
@@ -147,8 +158,7 @@ public class SaveService
                     throw new ArgumentException("Cannot save to system directories.", nameof(filePath));
                 }
             }
-            
-            // Ensure the path is not a root directory
+
             if (Path.GetFileName(fullPath) == string.Empty)
             {
                 throw new ArgumentException("Cannot save to a directory. Please specify a file name.", nameof(filePath));
@@ -156,7 +166,6 @@ public class SaveService
         }
         catch (ArgumentException)
         {
-            // Re-throw ArgumentException as-is (our validation errors)
             throw;
         }
         catch (NotSupportedException ex)

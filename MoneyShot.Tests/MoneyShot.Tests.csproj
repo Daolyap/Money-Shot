@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MoneyShot\MoneyShot.csproj" />
+    <ProjectReference Include="..\MoneyShot.Core\MoneyShot.Core.csproj" />
+    <ProjectReference Include="..\MoneyShot.Platform.Windows\MoneyShot.Platform.Windows.csproj" />
   </ItemGroup>
 
 </Project>

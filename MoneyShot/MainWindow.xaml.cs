@@ -1,10 +1,10 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Forms;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
+using MoneyShot.Abstractions;
+using MoneyShot.Interop;
+using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
 using MoneyShot.Views;
 using Application = System.Windows.Application;
@@ -16,24 +16,24 @@ namespace MoneyShot;
 /// </summary>
 public partial class MainWindow : Window
 {
-    private readonly ScreenshotService _screenshotService;
+    private readonly IScreenCapture _screenshotService;
     private readonly SaveService _saveService;
     private readonly SettingsService _settingsService;
-    private readonly HotKeyService _hotKeyService;
+    private readonly IGlobalHotkeys _hotKeyService;
     private readonly AutoUpdateService _autoUpdateService;
     private readonly HistoryService _historyService;
-    private NotifyIcon? _notifyIcon;
-    
+    private ITrayIcon? _trayIcon;
+
     // Maximum number of monitors that can have individual hotkeys (limited by number keys 1-9)
     private const int MaxMonitorHotkeys = 9;
 
     public MainWindow()
     {
         InitializeComponent();
-        _screenshotService = new ScreenshotService();
-        _saveService = new SaveService();
+        _screenshotService = new Win32ScreenCapture();
+        _saveService = new SaveService(new Win32Clipboard());
         _settingsService = new SettingsService();
-        _hotKeyService = new HotKeyService();
+        _hotKeyService = new Win32GlobalHotkeys();
         _autoUpdateService = new AutoUpdateService();
         _historyService = new HistoryService();
 
@@ -41,12 +41,12 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Performs post-construction startup: realizes the native handle, binds global hotkeys, and
-    /// shows the window only when the user hasn't opted to start in the tray. Called once from
-    /// <see cref="App.OnStartup"/>. When <see cref="Models.AppSettings.StartInTray"/> is set the
-    /// window is never shown — <see cref="WindowInteropHelper.EnsureHandle"/> creates the HWND that
-    /// hotkey registration needs without painting anything, which avoids the black-frame flash that
-    /// Show()-then-Hide() produced.
+    /// Performs post-construction startup: binds global hotkeys, and shows the window only when
+    /// the user hasn't opted to start in the tray. Called once from <see cref="App.OnStartup"/>.
+    /// When <see cref="Models.AppSettings.StartInTray"/> is set the window is never shown or
+    /// realized at all — <see cref="IGlobalHotkeys"/> owns its own native handle independent of
+    /// the main window (see Win32GlobalHotkeys), so there's nothing here that needs the window's
+    /// HWND to exist up front, unlike the Show()-then-Hide() flash this used to work around.
     /// </summary>
     public void InitializeApplication()
     {
@@ -54,18 +54,12 @@ public partial class MainWindow : Window
         {
             var settings = _settingsService.LoadSettings();
 
-            if (settings.StartInTray)
-            {
-                // Realize the Win32 handle without making the window visible.
-                new WindowInteropHelper(this).EnsureHandle();
-            }
-            else
+            if (!settings.StartInTray)
             {
                 ShowMainWindow();
             }
 
-            // The HWND now exists (via EnsureHandle or Show), so global hotkeys can bind to it.
-            _hotKeyService.Initialize(this);
+            _hotKeyService.Initialize();
             RegisterHotKeys();
             PopulateMonitorButtons();
 
@@ -123,7 +117,7 @@ public partial class MainWindow : Window
 
             await _autoUpdateService.StageAndPrepareUpdateAsync(updateInfo);
             _hotKeyService.UnregisterAll();
-            _notifyIcon?.Dispose();
+            _trayIcon?.Dispose();
             Application.Current.Shutdown();
         }
         catch (Exception ex)
@@ -148,7 +142,7 @@ public partial class MainWindow : Window
 
     private void PopulateMonitorButtons()
     {
-        var screens = _screenshotService.GetAllScreens();
+        var screens = _screenshotService.GetAllMonitors();
         if (screens.Count <= 1) return;
 
         var label = new TextBlock
@@ -167,7 +161,7 @@ public partial class MainWindow : Window
         {
             var screenIndex = i;
             var screen = screens[i];
-            var isPrimary = screen.Primary ? "  ·  primary" : string.Empty;
+            var isPrimary = screen.IsPrimary ? "  ·  primary" : string.Empty;
             var hotkeyHint = screenIndex < MaxMonitorHotkeys ? $"Ctrl+Shift+{screenIndex + 1}" : null;
 
             var content = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
@@ -196,7 +190,7 @@ public partial class MainWindow : Window
     private void RegisterHotKeys()
     {
         var settings = _settingsService.LoadSettings();
-        
+
         // Register hotkeys from settings
         _hotKeyService.RegisterHotKeyFromString(settings.HotKeyCapture, () =>
         {
@@ -207,9 +201,9 @@ public partial class MainWindow : Window
         {
             Dispatcher.Invoke(CaptureRegion);
         });
-        
+
         // Register Ctrl+Shift+Number hotkeys for individual monitors (PrintScreen+Number not supported by Windows API)
-        var screens = _screenshotService.GetAllScreens();
+        var screens = _screenshotService.GetAllMonitors();
         for (int i = 0; i < Math.Min(screens.Count, MaxMonitorHotkeys); i++)
         {
             var monitorIndex = i;
@@ -225,75 +219,43 @@ public partial class MainWindow : Window
     {
         // Unregister all existing hotkeys
         _hotKeyService.UnregisterAll();
-        
+
         // Re-register with new settings
         RegisterHotKeys();
     }
 
     private void SetupSystemTray()
     {
-        try
+        var menuItems = new List<TrayMenuItem>
         {
-            var processModule = System.Diagnostics.Process.GetCurrentProcess().MainModule;
-            var iconPath = processModule?.FileName;
-            
-            System.Drawing.Icon? icon = null;
-            if (iconPath != null && File.Exists(iconPath))
-            {
-                icon = System.Drawing.Icon.ExtractAssociatedIcon(iconPath);
-            }
-            
-            // Fallback to default icon if extraction fails
-            icon ??= System.Drawing.SystemIcons.Application;
+            new("Capture Full Screen", CaptureFullScreen),
+            new("Capture Region", CaptureRegion),
+        };
 
-            _notifyIcon = new NotifyIcon
-            {
-                Icon = icon,
-                Visible = true,
-                Text = "Money Shot - Screenshot Tool"
-            };
-        }
-        catch (Exception ex)
-        {
-            // Log the error and use default icon
-            MoneyShot.Services.Logger.Error("Error setting up system tray icon", ex);
-            
-            _notifyIcon = new NotifyIcon
-            {
-                Icon = System.Drawing.SystemIcons.Application,
-                Visible = true,
-                Text = "Money Shot - Screenshot Tool"
-            };
-        }
-
-        var contextMenu = new ContextMenuStrip();
-        contextMenu.Items.Add("Capture Full Screen", null, (s, e) => CaptureFullScreen());
-        contextMenu.Items.Add("Capture Region", null, (s, e) => CaptureRegion());
-        
         // Add individual monitor options
-        var screens = _screenshotService.GetAllScreens();
+        var screens = _screenshotService.GetAllMonitors();
         if (screens.Count > 1)
         {
-            contextMenu.Items.Add("-");
+            menuItems.Add(TrayMenuItem.Separator());
             for (int i = 0; i < screens.Count; i++)
             {
                 var screenIndex = i;
-                var screen = screens[i];
-                var isPrimary = screen.Primary ? " (Primary)" : "";
-                contextMenu.Items.Add($"Capture Monitor {i + 1}{isPrimary}", null, (s, e) => CaptureMonitor(screenIndex));
+                var isPrimary = screens[i].IsPrimary ? " (Primary)" : "";
+                menuItems.Add(new TrayMenuItem($"Capture Monitor {i + 1}{isPrimary}", () => CaptureMonitor(screenIndex)));
             }
         }
-        
-        contextMenu.Items.Add("-");
-        contextMenu.Items.Add("History", null, (s, e) => ShowHistory());
-        contextMenu.Items.Add("Check for Updates", null, async (s, e) => await CheckForUpdatesAsync(showUpToDateMessage: true, showErrorsToUser: true));
-        contextMenu.Items.Add("Settings", null, (s, e) => ShowSettings());
-        contextMenu.Items.Add("-");
-        contextMenu.Items.Add("Show Window", null, (s, e) => ShowMainWindow());
-        contextMenu.Items.Add("Exit", null, (s, e) => ExitApplication());
 
-        _notifyIcon.ContextMenuStrip = contextMenu;
-        _notifyIcon.DoubleClick += (s, e) => ShowMainWindow();
+        menuItems.Add(TrayMenuItem.Separator());
+        menuItems.Add(new TrayMenuItem("History", ShowHistory));
+        menuItems.Add(new TrayMenuItem("Check for Updates", async () => await CheckForUpdatesAsync(showUpToDateMessage: true, showErrorsToUser: true)));
+        menuItems.Add(new TrayMenuItem("Settings", ShowSettings));
+        menuItems.Add(TrayMenuItem.Separator());
+        menuItems.Add(new TrayMenuItem("Show Window", ShowMainWindow));
+        menuItems.Add(new TrayMenuItem("Exit", ExitApplication));
+
+        _trayIcon = new Win32TrayIcon();
+        _trayIcon.Show("Money Shot - Screenshot Tool", menuItems);
+        _trayIcon.DoubleClicked += ShowMainWindow;
     }
 
     private void CaptureFullScreen()
@@ -303,13 +265,13 @@ public partial class MainWindow : Window
             Hide();
             System.Threading.Thread.Sleep(200); // Small delay to hide the window
 
-            var screenshot = _screenshotService.CaptureFullScreen();
+            var screenshot = _screenshotService.CaptureFullScreen().ToBitmapSource();
             OpenEditor(screenshot, "FullScreen");
         }
         catch (Exception ex)
         {
             MoneyShot.Services.Logger.Error("Error capturing full screen", ex);
-            System.Windows.MessageBox.Show($"Failed to capture screenshot: {ex.Message}", "Capture Error", 
+            System.Windows.MessageBox.Show($"Failed to capture screenshot: {ex.Message}", "Capture Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             ShowMainWindow();
         }
@@ -326,9 +288,9 @@ public partial class MainWindow : Window
                 System.Windows.Application.Current.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
                 System.Threading.Thread.Sleep(300);
             }
-            
+
             // Capture frozen snapshot after hide when invisibility cloak is enabled.
-            var frozenScreen = _screenshotService.CaptureFullScreen();
+            var frozenScreen = _screenshotService.CaptureFullScreen().ToBitmapSource();
 
             if (!settings.HideUiFromScreenshots)
             {
@@ -350,7 +312,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             MoneyShot.Services.Logger.Error("Error capturing region", ex);
-            System.Windows.MessageBox.Show($"Failed to capture region: {ex.Message}", "Capture Error", 
+            System.Windows.MessageBox.Show($"Failed to capture region: {ex.Message}", "Capture Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             ShowMainWindow();
         }
@@ -365,13 +327,13 @@ public partial class MainWindow : Window
             System.Windows.Application.Current.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
             System.Threading.Thread.Sleep(300);
 
-            var screenshot = _screenshotService.CaptureScreen(monitorIndex);
+            var screenshot = _screenshotService.CaptureMonitor(monitorIndex).ToBitmapSource();
             OpenEditor(screenshot, $"Monitor {monitorIndex + 1}");
         }
         catch (Exception ex)
         {
             MoneyShot.Services.Logger.Error($"Error capturing monitor {monitorIndex}", ex);
-            System.Windows.MessageBox.Show($"Failed to capture monitor: {ex.Message}", "Capture Error", 
+            System.Windows.MessageBox.Show($"Failed to capture monitor: {ex.Message}", "Capture Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             ShowMainWindow();
         }
@@ -434,7 +396,7 @@ public partial class MainWindow : Window
     private void ExitApplication()
     {
         _hotKeyService.UnregisterAll();
-        _notifyIcon?.Dispose();
+        _trayIcon?.Dispose();
         Application.Current.Shutdown();
     }
 
@@ -461,7 +423,7 @@ public partial class MainWindow : Window
     private void About_Click(object sender, RoutedEventArgs e)
     {
         var settings = _settingsService.LoadSettings();
-        var screens = _screenshotService.GetAllScreens();
+        var screens = _screenshotService.GetAllMonitors();
         var monitorHotkeys = screens.Count > 1 ? $"\n• Ctrl+Shift+1-{Math.Min(screens.Count, MaxMonitorHotkeys)} — Capture individual monitors" : "";
         // SemVer portion only — the 4th part is the CI build number and isn't meaningful to users.
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
@@ -492,7 +454,7 @@ public partial class MainWindow : Window
         if (WindowState == WindowState.Minimized)
         {
             Hide();
-            _notifyIcon?.ShowBalloonTip(2000, "Money Shot", "App minimized to system tray", ToolTipIcon.Info);
+            _trayIcon?.ShowBalloonTip(2000, "Money Shot", "App minimized to system tray");
         }
     }
 
@@ -503,14 +465,14 @@ public partial class MainWindow : Window
         {
             e.Cancel = true;
             Hide();
-            _notifyIcon?.ShowBalloonTip(2000, "Money Shot", "App is still running in the system tray", ToolTipIcon.Info);
+            _trayIcon?.ShowBalloonTip(2000, "Money Shot", "App is still running in the system tray");
         }
         else
         {
             ExitApplication();
         }
     }
-    
+
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 2)
@@ -531,12 +493,12 @@ public partial class MainWindow : Window
             }
         }
     }
-    
+
     private void Minimize_Click(object sender, RoutedEventArgs e)
     {
         WindowState = WindowState.Minimized;
     }
-    
+
     private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
     {
         if (WindowState == WindowState.Maximized)

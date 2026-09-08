@@ -1,15 +1,23 @@
-using System.IO;
+using System;
 using System.Text;
-using System.Windows;
-using System.Windows.Input;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using MoneyShot.Abstractions;
 using MoneyShot.Models;
 using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
-using Application = System.Windows.Application;
+using MoneyShot.UI.Services;
 
-namespace MoneyShot.Views;
+namespace MoneyShot.UI.Views;
 
+/// <summary>
+/// Avalonia port of MoneyShot/Views/SettingsWindow.xaml.cs — see LINUX_PORT.md Phase 1. Logic is
+/// unchanged; MessageBox.Show becomes async SimpleMessageBox.ShowAsync, and WinForms'
+/// FolderBrowserDialog becomes Avalonia's async IStorageProvider.OpenFolderPickerAsync.
+/// </summary>
 public partial class SettingsWindow : Window
 {
     private readonly SettingsService _settingsService;
@@ -69,57 +77,51 @@ public partial class SettingsWindow : Window
 
         SelectComboBoxItem(FormatComboBox, _settings.DefaultFileFormat);
 
-        // History settings
         SaveToHistoryCheckbox.IsChecked = _settings.SaveCapturesToHistory;
         HistoryRetentionTextBox.Text = _settings.HistoryRetentionCount.ToString();
         HistoryFolderText.Text = new HistoryService().HistoryDirectory;
 
-        // Load hotkey settings
         SelectComboBoxItem(HotKeyCaptureComboBox, _settings.HotKeyCapture);
         SelectComboBoxItem(HotKeyRegionCaptureComboBox, _settings.HotKeyRegionCapture);
     }
 
-    private void SelectComboBoxItem(System.Windows.Controls.ComboBox comboBox, string value)
+    private static void SelectComboBoxItem(ComboBox comboBox, string value)
     {
-        foreach (System.Windows.Controls.ComboBoxItem item in comboBox.Items)
+        foreach (var obj in comboBox.Items)
         {
-            if (item.Content.ToString() == value)
+            if (obj is ComboBoxItem item && item.Content?.ToString() == value)
             {
-                item.IsSelected = true;
+                comboBox.SelectedItem = item;
                 return;
             }
         }
     }
 
-    private void BrowsePath_Click(object sender, RoutedEventArgs e)
+    private async void BrowsePath_Click(object? sender, RoutedEventArgs e)
     {
         try
         {
-            var dialog = new System.Windows.Forms.FolderBrowserDialog();
-            dialog.SelectedPath = _settings.DefaultSavePath;
-            
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            var startFolder = await StorageProvider.TryGetFolderFromPathAsync(new Uri(_settings.DefaultSavePath));
+            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
-                // Validate the selected path
-                if (!string.IsNullOrWhiteSpace(dialog.SelectedPath) && Directory.Exists(dialog.SelectedPath))
-                {
-                    SavePathTextBox.Text = dialog.SelectedPath;
-                }
-                else
-                {
-                    MessageBox.Show("The selected folder is invalid.", "Invalid Folder", 
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
+                Title = "Choose default save folder",
+                SuggestedStartLocation = startFolder,
+                AllowMultiple = false
+            });
+
+            var selected = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+            if (!string.IsNullOrWhiteSpace(selected) && System.IO.Directory.Exists(selected))
+            {
+                SavePathTextBox.Text = selected;
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error selecting folder: {ex.Message}", "Error", 
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            await SimpleMessageBox.ShowAsync(this, $"Error selecting folder: {ex.Message}", "Error");
         }
     }
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private async void Save_Click(object? sender, RoutedEventArgs e)
     {
         try
         {
@@ -129,7 +131,7 @@ public partial class SettingsWindow : Window
             _settings.CheckForUpdatesOnStartup = CheckForUpdatesCheckbox.IsChecked ?? true;
             _settings.HideUiFromScreenshots = HideUiFromScreenshotsCheckbox.IsChecked ?? true;
             _settings.DisableWindowsPrintScreen = DisableWindowsPrintScreenCheckbox.IsChecked ?? false;
-            _settings.DefaultSavePath = SavePathTextBox.Text;
+            _settings.DefaultSavePath = SavePathTextBox.Text ?? _settings.DefaultSavePath;
 
             if (SaveToClipboardRadio.IsChecked == true)
                 _settings.DefaultSaveDestination = SaveDestination.Clipboard;
@@ -138,9 +140,7 @@ public partial class SettingsWindow : Window
             else
                 _settings.DefaultSaveDestination = SaveDestination.Both;
 
-            // Items are ComboBoxItems, not raw strings — reading SelectedItem as a string used to
-            // silently skip saving the format.
-            if (FormatComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem formatItem)
+            if (FormatComboBox.SelectedItem is ComboBoxItem formatItem)
                 _settings.DefaultFileFormat = formatItem.Content?.ToString() ?? "PNG";
 
             _settings.SaveCapturesToHistory = SaveToHistoryCheckbox.IsChecked ?? true;
@@ -149,29 +149,26 @@ public partial class SettingsWindow : Window
                 _settings.HistoryRetentionCount = Math.Clamp(retention, 0, 500);
             }
 
-            // Save hotkey settings
-            if (HotKeyCaptureComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem captureItem)
-                _settings.HotKeyCapture = captureItem.Content.ToString() ?? "PrintScreen";
-            
-            if (HotKeyRegionCaptureComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem regionItem)
-                _settings.HotKeyRegionCapture = regionItem.Content.ToString() ?? "Ctrl+PrintScreen";
+            if (HotKeyCaptureComboBox.SelectedItem is ComboBoxItem captureItem)
+                _settings.HotKeyCapture = captureItem.Content?.ToString() ?? "PrintScreen";
+
+            if (HotKeyRegionCaptureComboBox.SelectedItem is ComboBoxItem regionItem)
+                _settings.HotKeyRegionCapture = regionItem.Content?.ToString() ?? "Ctrl+PrintScreen";
 
             _settingsService.SaveSettings(_settings);
-            
+
             try
             {
                 _autoStart.SetStartupWithApp(_settings.RunOnStartup);
             }
             catch (InvalidOperationException ex)
             {
-                MessageBox.Show($"Warning: {ex.Message}\nOther settings were saved successfully.",
-                    "Partial Success", MessageBoxButton.OK, MessageBoxImage.Warning);
+                await SimpleMessageBox.ShowAsync(this, $"Warning: {ex.Message}\nOther settings were saved successfully.", "Partial Success");
             }
 
             var printScreenApplied = _autoStart.SetPrintScreenSuppressed(_settings.DisableWindowsPrintScreen);
 
-            // Reload hotkeys in the main window
-            if (Application.Current.MainWindow is MainWindow mainWindow)
+            if (Owner is MainWindow mainWindow)
             {
                 mainWindow.ReloadHotKeys();
             }
@@ -180,30 +177,26 @@ public partial class SettingsWindow : Window
                 ? "Settings saved successfully! Hotkeys have been updated."
                 : "Settings saved, but Windows Print Screen integration could not be fully updated. You may need to reopen the app as admin or update the Print Screen snipping setting in Windows keyboard settings.";
 
-            MessageBox.Show(successMessage, 
-                printScreenApplied ? "Success" : "Partial Success",
-                MessageBoxButton.OK,
-                printScreenApplied ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            await SimpleMessageBox.ShowAsync(this, successMessage, printScreenApplied ? "Success" : "Partial Success");
             Close();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error saving settings: {ex.Message}", 
-                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            await SimpleMessageBox.ShowAsync(this, $"Error saving settings: {ex.Message}", "Error");
         }
     }
 
-    private void Cancel_Click(object sender, RoutedEventArgs e)
+    private void Cancel_Click(object? sender, RoutedEventArgs e)
     {
         Close();
     }
 
-    private void ViewLogs_Click(object sender, RoutedEventArgs e)
+    private void ViewLogs_Click(object? sender, RoutedEventArgs e)
     {
         OpenFolderInExplorer(Logger.LogDirectoryPath);
     }
 
-    private void OpenHistoryFolder_Click(object sender, RoutedEventArgs e)
+    private void OpenHistoryFolder_Click(object? sender, RoutedEventArgs e)
     {
         OpenFolderInExplorer(new HistoryService().HistoryDirectory);
     }
@@ -221,77 +214,64 @@ public partial class SettingsWindow : Window
         catch (Exception ex)
         {
             Logger.Error($"Failed to open folder '{path}'", ex);
-            MessageBox.Show($"Could not open folder:\n{path}", "Money Shot",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
-    private void ClearHistory_Click(object sender, RoutedEventArgs e)
+    private async void ClearHistory_Click(object? sender, RoutedEventArgs e)
     {
         var history = new HistoryService();
         var entries = history.List();
         if (entries.Count == 0)
         {
-            MessageBox.Show("History is already empty.", "Money Shot",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            await SimpleMessageBox.ShowAsync(this, "History is already empty.", "Money Shot");
             return;
         }
 
-        var result = MessageBox.Show(
+        var result = await SimpleMessageBox.ShowAsync(this,
             $"Delete all {entries.Count} captures from local history? This cannot be undone.",
-            "Clear history",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+            "Clear history", SimpleMessageBoxButtons.YesNo);
+        if (result != SimpleMessageBoxResult.Yes) return;
 
         foreach (var entry in entries)
         {
             history.Delete(entry);
         }
-        MessageBox.Show("History cleared.", "Money Shot", MessageBoxButton.OK, MessageBoxImage.Information);
+        await SimpleMessageBox.ShowAsync(this, "History cleared.", "Money Shot");
     }
-    
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+
+    private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.ClickCount == 2)
         {
-            // Double-click to maximize/restore
-            MaximizeRestore_Click(sender, e);
+            MaximizeRestore_Click(sender, new RoutedEventArgs());
         }
-        else if (e.ClickCount == 1)
+        else if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            try
-            {
-                DragMove();
-            }
-            catch (InvalidOperationException)
-            {
-                // DragMove can throw if window state is changing or mouse is not pressed
-                // Silently ignore these cases
-            }
+            BeginMoveDrag(e);
         }
     }
-    
-    private void Minimize_Click(object sender, RoutedEventArgs e)
+
+    private void Minimize_Click(object? sender, RoutedEventArgs e)
     {
         WindowState = WindowState.Minimized;
     }
-    
-    private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
+
+    private void MaximizeRestore_Click(object? sender, RoutedEventArgs e)
     {
+        var resources = Avalonia.Application.Current!.Resources;
         if (WindowState == WindowState.Maximized)
         {
             WindowState = WindowState.Normal;
-            MaximizeRestoreIcon.Data = (System.Windows.Media.Geometry)FindResource("Icon.WindowMaximize");
+            MaximizeRestoreIcon.Data = (Geometry)resources["Icon.WindowMaximize"]!;
         }
         else
         {
             WindowState = WindowState.Maximized;
-            MaximizeRestoreIcon.Data = (System.Windows.Media.Geometry)FindResource("Icon.WindowRestore");
+            MaximizeRestoreIcon.Data = (Geometry)resources["Icon.WindowRestore"]!;
         }
     }
-    
-    private void Close_Click(object sender, RoutedEventArgs e)
+
+    private void Close_Click(object? sender, RoutedEventArgs e)
     {
         Close();
     }

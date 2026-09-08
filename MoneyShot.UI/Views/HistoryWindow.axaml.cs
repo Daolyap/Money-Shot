@@ -1,15 +1,20 @@
+using System;
 using System.Diagnostics;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using MoneyShot.Models;
 using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
+using MoneyShot.UI.Services;
 
-namespace MoneyShot.Views;
+namespace MoneyShot.UI.Views;
 
+/// <summary>
+/// Avalonia port of MoneyShot/Views/HistoryWindow.xaml.cs — see LINUX_PORT.md Phase 1.
+/// </summary>
 public partial class HistoryWindow : Window
 {
     private readonly HistoryService _history;
@@ -36,7 +41,7 @@ public partial class HistoryWindow : Window
         }
     }
 
-    private FrameworkElement BuildThumbnailTile(HistoryEntry entry)
+    private Control BuildThumbnailTile(HistoryEntry entry)
     {
         var thumb = _history.LoadThumbnail(entry) ?? _history.LoadImage(entry);
         var image = new Image
@@ -50,10 +55,10 @@ public partial class HistoryWindow : Window
         var meta = new TextBlock
         {
             Text = $"{entry.CapturedAt:yyyy-MM-dd HH:mm:ss}\n{entry.Width}×{entry.Height} · {entry.Source}",
-            Foreground = (Brush)FindResource("Cocoa.TextSecondaryBrush"),
+            Foreground = (IBrush)Avalonia.Application.Current!.Resources["Cocoa.TextSecondaryBrush"]!,
             FontSize = 11,
-            Margin = new Thickness(0, 6, 0, 0),
-            TextWrapping = TextWrapping.Wrap,
+            Margin = new Avalonia.Thickness(0, 6, 0, 0),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
         };
 
         var stack = new StackPanel { Width = 220 };
@@ -62,12 +67,12 @@ public partial class HistoryWindow : Window
 
         var border = new Border
         {
-            Style = (Style)Resources["ThumbBorder"],
-            Cursor = Cursors.Hand,
+            Classes = { "thumb-tile" },
+            Cursor = new Cursor(StandardCursorType.Hand),
             Tag = entry,
             Child = stack,
         };
-        border.MouseLeftButtonUp += Tile_OpenInEditor;
+        border.PointerReleased += Tile_OpenInEditor;
         border.ContextMenu = BuildContextMenu(entry);
         return border;
     }
@@ -75,48 +80,50 @@ public partial class HistoryWindow : Window
     private ContextMenu BuildContextMenu(HistoryEntry entry)
     {
         var menu = new ContextMenu();
+        var items = new Avalonia.Controls.Controls();
 
         var openItem = new MenuItem { Header = "Open in Editor" };
         openItem.Click += (_, _) => OpenInEditor(entry);
-        menu.Items.Add(openItem);
+        items.Add(openItem);
 
         var copyItem = new MenuItem { Header = "Copy to Clipboard" };
         copyItem.Click += (_, _) => CopyToClipboard(entry);
-        menu.Items.Add(copyItem);
+        items.Add(copyItem);
 
-        menu.Items.Add(new Separator { Style = (Style)FindResource("CocoaMenuSeparator") });
+        items.Add(new Separator());
 
         var deleteItem = new MenuItem { Header = "Delete" };
-        deleteItem.Click += (_, _) =>
+        deleteItem.Click += async (_, _) =>
         {
-            if (MessageBox.Show("Delete this capture from history?", "Money Shot",
-                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            var result = await SimpleMessageBox.ShowAsync(this, "Delete this capture from history?", "Money Shot", SimpleMessageBoxButtons.YesNo);
+            if (result != SimpleMessageBoxResult.Yes) return;
             _history.Delete(entry);
             Refresh();
         };
-        menu.Items.Add(deleteItem);
+        items.Add(deleteItem);
 
+        menu.ItemsSource = items;
         return menu;
     }
 
-    private void Tile_OpenInEditor(object sender, MouseButtonEventArgs e)
+    private void Tile_OpenInEditor(object? sender, PointerReleasedEventArgs e)
     {
+        if (e.InitialPressMouseButton != MouseButton.Left) return;
         if (sender is Border b && b.Tag is HistoryEntry entry) OpenInEditor(entry);
     }
 
-    private void OpenInEditor(HistoryEntry entry)
+    private async void OpenInEditor(HistoryEntry entry)
     {
         var image = _history.LoadImage(entry);
         if (image == null)
         {
-            MessageBox.Show("This capture's image file could not be loaded.", "Money Shot",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            await SimpleMessageBox.ShowAsync(this, "This capture's image file could not be loaded.", "Money Shot");
             return;
         }
         try
         {
             var editor = new EditorWindow(image);
-            editor.ShowDialog();
+            await editor.ShowDialog(this);
         }
         finally
         {
@@ -126,7 +133,7 @@ public partial class HistoryWindow : Window
         }
     }
 
-    private void CopyToClipboard(HistoryEntry entry)
+    private async void CopyToClipboard(HistoryEntry entry)
     {
         var image = _history.LoadImage(entry);
         if (image == null) return;
@@ -137,12 +144,11 @@ public partial class HistoryWindow : Window
         catch (Exception ex)
         {
             Logger.Error("Copy from history failed", ex);
-            MessageBox.Show("Failed to copy image to clipboard.", "Money Shot",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            await SimpleMessageBox.ShowAsync(this, "Failed to copy image to clipboard.", "Money Shot");
         }
     }
 
-    private void OpenFolder_Click(object sender, RoutedEventArgs e)
+    private void OpenFolder_Click(object? sender, RoutedEventArgs e)
     {
         try
         {
@@ -154,23 +160,18 @@ public partial class HistoryWindow : Window
         }
     }
 
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void Close_Click(object? sender, RoutedEventArgs e) => Close();
 
-    private void Minimize_Click(object sender, RoutedEventArgs e)
+    private void Minimize_Click(object? sender, RoutedEventArgs e)
     {
         WindowState = WindowState.Minimized;
     }
 
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.ClickCount != 1) return;
-        try
+        if (e.ClickCount == 1 && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            DragMove();
-        }
-        catch (InvalidOperationException)
-        {
-            // DragMove throws if the mouse is released before the drag starts.
+            BeginMoveDrag(e);
         }
     }
 }

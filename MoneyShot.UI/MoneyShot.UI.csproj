@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- net10.0-windows, not bare net10.0: a plain net10.0 project cannot reference a
+         net10.0-windows one at all (TFM compatibility requires the consumer to be equal-or-more
+         -specific, not the other way around — EnableWindowsTargeting only relaxes restore on a
+         non-Windows *build agent*, it doesn't let a cross-platform TFM depend on a Windows-only
+         one). This is also just honest: Phase 1 is explicitly a Windows-only Avalonia build (see
+         LINUX_PORT.md) since MoneyShot.Platform.Linux doesn't exist yet — this project becomes
+         genuinely cross-platform (TargetFrameworks net10.0;net10.0-windows, or a runtime OS check
+         instead of a compile-time project reference) only once Phase 2 adds that project. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <Version>2.1.0</Version>
+    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <FileVersion>2.1.0.0</FileVersion>
+    <Company>Daolyap &amp; iSaluki</Company>
+    <Authors>Daolyap &amp; iSaluki</Authors>
+    <Product>Money Shot Screenshot Tool</Product>
+    <Description>A modern, feature-rich screenshot tool with comprehensive annotation capabilities (Avalonia UI — see LINUX_PORT.md Phase 1).</Description>
+    <Copyright>Copyright © 2026 Daolyap &amp; iSaluki</Copyright>
+  </PropertyGroup>
+
+  <!--
+    Avalonia itself is cross-platform. On Windows, platform integration (screen capture, hotkeys,
+    tray, clipboard, autostart) comes from MoneyShot.Platform.Windows via the same
+    MoneyShot.Abstractions interfaces MoneyShot (WPF) uses — see LINUX_PORT.md Phase 0/1. This
+    project is additive: it does not replace or modify the shipping WPF app/installer, it exists
+    to prove out (or disprove) the Avalonia UI port.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <!-- Avalonia's own Bitmap.Save is PNG-only regardless of requested format/extension (a known
+         framework limitation, see AvaloniaUI/Avalonia#12493) — SkiaSharp is already loaded
+         transitively (it's Avalonia's rendering backend on desktop), so referencing it directly
+         for real JPEG/BMP encoding isn't a new dependency, just an explicit one. Must stay >=
+         whatever Avalonia.Skia 12.1.2 itself requires (3.119.4 at time of writing) or NuGet
+         reports a package-downgrade error. -->
+    <PackageReference Include="SkiaSharp" Version="4.151.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MoneyShot.Core\MoneyShot.Core.csproj" />
+  </ItemGroup>
+
+  <!-- WinForms' ColorDialog is reused as-is for the custom-color picker (EditorWindow) rather
+       than building a new Avalonia color picker from scratch — matches CLAUDE.md's "reuse the OS
+       picker" reasoning from the WPF build. Fine for now since this build is Windows-only until
+       Phase 2; a cross-platform color picker becomes necessary only once Linux is targeted. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
+  <!-- Platform integration is wired per-OS at startup (App.axaml.cs); Windows is the only
+       implementation that exists today (MoneyShot.Platform.Windows), referenced unconditionally
+       for now since this build only targets Windows until Phase 2 adds MoneyShot.Platform.Linux. -->
+  <ItemGroup>
+    <ProjectReference Include="..\MoneyShot.Platform.Windows\MoneyShot.Platform.Windows.csproj" />
+  </ItemGroup>
+
+</Project>

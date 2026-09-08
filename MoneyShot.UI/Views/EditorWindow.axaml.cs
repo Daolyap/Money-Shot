@@ -1,19 +1,43 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
-using MoneyShot.Editor;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using MoneyShot.Models;
 using MoneyShot.Platform.Windows;
-using MoneyShot.Services;
+using MoneyShot.UI.Editor;
+using MoneyShot.UI.Interop;
+using MoneyShot.UI.Services;
+using Logger = MoneyShot.Services.Logger;
 
-namespace MoneyShot.Views;
+namespace MoneyShot.UI.Views;
 
+/// <summary>
+/// Avalonia port of MoneyShot/Views/EditorWindow.xaml.cs — see LINUX_PORT.md Phase 1. This is the
+/// single highest-risk file in the port: the largest, most stateful piece of mouse-interaction
+/// code in the app (see CLAUDE.md's "Resize/drag — design notes", which documents multiple past
+/// regressions in the WPF version's equivalent logic). The structure and every rule from that
+/// section is preserved exactly; only the framework APIs differ (Avalonia's unified Pointer
+/// events instead of separate Mouse events, Geometry.FillContains/StrokeContains instead of
+/// WPF's, async StorageProvider/dialogs instead of blocking SaveFileDialog/MessageBox). This has
+/// been verified to compile and launch, NOT exhaustively verified interactively across every
+/// tool/resize/undo/crop/zoom combination — see the verification notes wherever this is reported
+/// back to the user.
+/// </summary>
 public partial class EditorWindow : Window
 {
-    private BitmapSource _originalImage;
+    private Bitmap _originalImage;
     private AnnotationTool _currentTool = AnnotationTool.None;
     private Color _currentColor = Colors.Red;
     private Color _currentTextBackgroundColor = Colors.Transparent;
@@ -25,8 +49,7 @@ public partial class EditorWindow : Window
     private readonly UndoController _undo = new();
     private int _numberCounter = 1;
 
-    // Selection/move fields
-    private UIElement? _selectedElement;
+    private Control? _selectedElement;
     private Point _dragStartPoint;
     private bool _isDragging;
     private Border? _selectionBorder;
@@ -35,13 +58,9 @@ public partial class EditorWindow : Window
     private const double MinZoom = 0.25;
     private const double MaxZoom = 4.0;
 
-    // Pixelate tool constant
     private const string PixelateTag = "pixelate";
-
-    // Number tool constant — identifies number-label TextBlocks so undo/delete can revert the counter
     private const string NumberLabelTag = "numberLabel";
 
-    // Resize fields
     private bool _isResizing;
     private ElementResizeMode _resizeMode = ElementResizeMode.None;
     private Point _resizeStartPoint;
@@ -52,75 +71,52 @@ public partial class EditorWindow : Window
     private double _originalTextFontSize;
     private ElementState? _resizeStartState;
     private readonly List<Rectangle> _resizeHandles = new();
-    // Two-handle resize for Line / Path (arrow): stores the original endpoints and which one
-    // the user grabbed. Kept separate from the box-resize fields to avoid intermingling state.
     private bool _isEndpointResizing;
-    private bool _isResizingEndpointStart; // true = the "start" endpoint, false = the "end" endpoint
+    private bool _isResizingEndpointStart;
     private Point _originalEndpointStart;
     private Point _originalEndpointEnd;
 
-    private const int FreehandMinDistance = 2; // Minimum pixel distance between points
-    private const double ShapeUpdateMinDistancePixels = 1.5; // Minimum drag distance in pixels before updating shape geometry
+    private const int FreehandMinDistance = 2;
+    private const double ShapeUpdateMinDistancePixels = 1.5;
     private const double MinResizeDimension = 10;
     private const double MinTextScaleFactor = 0.5;
     private const double MinTextFontSize = 8;
-    // Visible square stays small but the click hit-zone is finger-sized to help on 4K displays.
     private const double HandleVisualSize = 12;
     private const double HandleHitZoneSize = 24;
 
-    // Crop fields
     private Rectangle? _cropRectangle;
     private bool _isCropping;
 
-    // Freehand drawing fields
     private Polyline? _currentPolyline;
     private Point _lastDrawPoint;
 
-    // Cached pen for hit testing to avoid repeated allocations
-    private static readonly Pen HitTestPen = new(Brushes.Black, 10);
+    private static readonly IPen HitTestPen = new Pen(Brushes.Black, 10);
+    private static readonly SolidColorBrush SelectionBrush = new(Color.FromRgb(0xE8, 0xA8, 0x5C));
 
-    // Selection chrome (border + handles). Bright caramel matches the cocoa theme and stays
-    // visible against most screenshot content. Frozen so it can be shared by every handle.
-    private static readonly SolidColorBrush SelectionBrush = CreateFrozen(Color.FromRgb(0xE8, 0xA8, 0x5C));
-
-    private static SolidColorBrush CreateFrozen(Color color)
-    {
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        return brush;
-    }
-
-    // Middle-mouse pan state. Held while the user is dragging with MMB to translate the view.
     private bool _isPanning;
     private Point _panStartPoint;
     private double _panStartTranslateX;
     private double _panStartTranslateY;
     private Cursor? _savedCursorBeforePan;
 
-    public EditorWindow(BitmapSource image)
+    private readonly ScaleTransform ZoomTransform = new() { ScaleX = 1, ScaleY = 1 };
+    private readonly TranslateTransform PanTransform = new();
+
+    public EditorWindow(Bitmap image)
     {
         InitializeComponent();
+        ImageCanvas.RenderTransform = new TransformGroup { Children = { ZoomTransform, PanTransform } };
         _originalImage = image;
         _saveService = new SaveService(new Win32Clipboard());
         DisplayImage();
 
-        // Add keyboard event handler for Delete key
         KeyDown += EditorWindow_KeyDown;
 
-        // Add mouse wheel event handler for Ctrl + scroll zoom
-        // Use PreviewMouseWheel to catch before ScrollViewer
-        PreviewMouseWheel += EditorWindow_MouseWheel;
+        AddHandler(PointerWheelChangedEvent, EditorWindow_PointerWheelChanged, RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, EditorWindow_PreviewPointerPressed_Pan, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, EditorWindow_PreviewPointerMoved_Pan, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, EditorWindow_PreviewPointerReleased_Pan, RoutingStrategies.Tunnel);
 
-        // Middle-mouse pan — drag with MMB scrolls the editor viewport like 3D modelling apps.
-        PreviewMouseDown += EditorWindow_PreviewMouseDown_Pan;
-        PreviewMouseMove += EditorWindow_PreviewMouseMove_Pan;
-        PreviewMouseUp += EditorWindow_PreviewMouseUp_Pan;
-
-        // WPF holds onto sizable native bitmap backings (Pbgra32 RenderTargetBitmaps, GDI brushes,
-        // CroppedBitmap, etc.) for the duration of the window. Without an explicit teardown the
-        // process working set sits at 600-700MB after the editor closes instead of returning to
-        // the dormant ~80MB level. ReleaseEditorResources() drops references; OpenEditor in
-        // MainWindow then forces a GC + working-set trim once we've fully unwound.
         Closed += EditorWindow_Closed;
     }
 
@@ -129,12 +125,8 @@ public partial class EditorWindow : Window
         try
         {
             KeyDown -= EditorWindow_KeyDown;
-            PreviewMouseWheel -= EditorWindow_MouseWheel;
-            PreviewMouseDown -= EditorWindow_PreviewMouseDown_Pan;
-            PreviewMouseMove -= EditorWindow_PreviewMouseMove_Pan;
-            PreviewMouseUp -= EditorWindow_PreviewMouseUp_Pan;
 
-            DrawingCanvas?.Children.Clear();
+            DrawingCanvas.Children.Clear();
             _resizeHandles.Clear();
             _selectionBorder = null;
             _selectedElement = null;
@@ -147,35 +139,30 @@ public partial class EditorWindow : Window
             {
                 ImageDisplay.Source = null;
             }
-            _originalImage = null!;
         }
         catch (Exception ex)
         {
             Logger.Warn("Editor teardown encountered a non-fatal error", ex);
         }
     }
-    
-    private void EditorWindow_KeyDown(object sender, KeyEventArgs e)
+
+    private void EditorWindow_KeyDown(object? sender, KeyEventArgs e)
     {
-        // While the shortcuts overlay is up, swallow the next key and dismiss it.
-        if (ShortcutsOverlay != null && ShortcutsOverlay.Visibility == Visibility.Visible)
+        if (ShortcutsOverlay != null && ShortcutsOverlay.IsVisible)
         {
-            ShortcutsOverlay.Visibility = Visibility.Collapsed;
+            ShortcutsOverlay.IsVisible = false;
             e.Handled = true;
             return;
         }
 
-        // `?` (Shift+/) toggles the shortcut overlay regardless of other modifiers.
-        if (e.Key == Key.OemQuestion && e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Shift))
+        if (e.Key == Key.OemQuestion && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             ToggleShortcutsOverlay();
             e.Handled = true;
             return;
         }
 
-        // Handle tool selection shortcuts
-        if (!e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control) &&
-            !e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Alt))
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
         {
             switch (e.Key)
             {
@@ -183,11 +170,11 @@ public partial class EditorWindow : Window
                     SelectTool(AnnotationTool.Rectangle);
                     e.Handled = true;
                     break;
-                case Key.C when !e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control):
+                case Key.C:
                     SelectTool(AnnotationTool.Circle);
                     e.Handled = true;
                     break;
-                case Key.A when !e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control):
+                case Key.A:
                     SelectTool(AnnotationTool.Arrow);
                     e.Handled = true;
                     break;
@@ -213,7 +200,6 @@ public partial class EditorWindow : Window
                     e.Handled = true;
                     break;
                 case Key.Escape:
-                    // Close the editor window and cancel the screenshot
                     Close();
                     e.Handled = true;
                     break;
@@ -226,9 +212,8 @@ public partial class EditorWindow : Window
                     break;
             }
         }
-        
-        // Handle Ctrl shortcuts
-        if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             switch (e.Key)
             {
@@ -262,79 +247,58 @@ public partial class EditorWindow : Window
             }
         }
     }
-    
-    private void EditorWindow_MouseWheel(object sender, MouseWheelEventArgs e)
+
+    private void EditorWindow_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        // Only zoom when Ctrl is pressed
-        if (Keyboard.Modifiers == ModifierKeys.Control)
+        if (e.KeyModifiers == KeyModifiers.Control)
         {
-            if (e.Delta > 0)
+            if (e.Delta.Y > 0)
             {
-                // Scroll up = Zoom in
-                if (_zoomLevel < MaxZoom)
-                {
-                    _zoomLevel += ZoomIncrement;
-                    ApplyZoom();
-                }
+                if (_zoomLevel < MaxZoom) { _zoomLevel += ZoomIncrement; ApplyZoom(); }
             }
             else
             {
-                // Scroll down = Zoom out
-                if (_zoomLevel > MinZoom)
-                {
-                    _zoomLevel -= ZoomIncrement;
-                    ApplyZoom();
-                }
+                if (_zoomLevel > MinZoom) { _zoomLevel -= ZoomIncrement; ApplyZoom(); }
             }
             e.Handled = true;
         }
     }
 
-    // Middle-mouse-button pan — matches the convention used in Blender, Maya, Figma, and most
-    // image editors: hold MMB and drag to move the viewport. We translate the ImageCanvas via
-    // PanTransform rather than scrolling the ScrollViewer because the latter can't move when
-    // content fits inside the viewport — there's no overflow to scroll. The TranslateTransform
-    // works freely regardless of zoom level. Preview* events run before Canvas_MouseDown so the
-    // active drawing tool isn't disturbed.
-    private void EditorWindow_PreviewMouseDown_Pan(object sender, MouseButtonEventArgs e)
+    private void EditorWindow_PreviewPointerPressed_Pan(object? sender, PointerPressedEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Middle) return;
+        if (e.GetCurrentPoint(this).Properties.PointerUpdateKind != PointerUpdateKind.MiddleButtonPressed) return;
 
         _isPanning = true;
         _panStartPoint = e.GetPosition(this);
         _panStartTranslateX = PanTransform.X;
         _panStartTranslateY = PanTransform.Y;
         _savedCursorBeforePan = Cursor;
-        Cursor = Cursors.SizeAll;
-        CaptureMouse();
+        Cursor = new Cursor(StandardCursorType.SizeAll);
+        e.Pointer.Capture(this);
         e.Handled = true;
     }
 
-    private void EditorWindow_PreviewMouseMove_Pan(object sender, MouseEventArgs e)
+    private void EditorWindow_PreviewPointerMoved_Pan(object? sender, PointerEventArgs e)
     {
         if (!_isPanning) return;
 
         var current = e.GetPosition(this);
-        // Drag direction tracks the cursor: pull right/down → content moves right/down.
         PanTransform.X = _panStartTranslateX + (current.X - _panStartPoint.X);
         PanTransform.Y = _panStartTranslateY + (current.Y - _panStartPoint.Y);
         e.Handled = true;
     }
 
-    private void EditorWindow_PreviewMouseUp_Pan(object sender, MouseButtonEventArgs e)
+    private void EditorWindow_PreviewPointerReleased_Pan(object? sender, PointerReleasedEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Middle || !_isPanning) return;
+        if (!_isPanning) return;
 
         _isPanning = false;
-        if (IsMouseCaptured)
-        {
-            ReleaseMouseCapture();
-        }
+        e.Pointer.Capture(null);
         Cursor = _savedCursorBeforePan;
         _savedCursorBeforePan = null;
         e.Handled = true;
     }
-    
+
     private void DeleteSelectedElement()
     {
         if (_selectedElement != null)
@@ -348,12 +312,7 @@ public partial class EditorWindow : Window
         }
     }
 
-    /// <summary>
-    /// After a number label leaves the canvas (undo or delete), pull the counter back down to
-    /// one past the highest label still present — so 1,2,3 + undo continues at 3, not 4. Never
-    /// raises the counter, so an explicit "reset numbering" survives unrelated deletions.
-    /// </summary>
-    private void SyncNumberCounterAfterRemoval(UIElement element)
+    private void SyncNumberCounterAfterRemoval(Control element)
     {
         if (element is TextBlock { Tag: NumberLabelTag })
         {
@@ -361,11 +320,7 @@ public partial class EditorWindow : Window
         }
     }
 
-    /// <summary>
-    /// After a number label returns to the canvas (undo of a delete), push the counter up past
-    /// it so the next placed number doesn't duplicate the restored one.
-    /// </summary>
-    private void SyncNumberCounterAfterRestore(UIElement element)
+    private void SyncNumberCounterAfterRestore(Control element)
     {
         if (element is TextBlock { Tag: NumberLabelTag })
         {
@@ -387,10 +342,7 @@ public partial class EditorWindow : Window
         return max;
     }
 
-    // Hooks invoked by UndoController action records. These remain on EditorWindow because
-    // they touch private editor state (the canvas, selection, image), but the undo stack and
-    // record types now live in MoneyShot.Editor.UndoController.
-    internal void UndoAddElement(UIElement element)
+    internal void UndoAddElement(Control element)
     {
         DrawingCanvas.Children.Remove(element);
         if (_selectedElement == element)
@@ -400,7 +352,7 @@ public partial class EditorWindow : Window
         SyncNumberCounterAfterRemoval(element);
     }
 
-    internal void UndoRemoveElement(UIElement element, int index)
+    internal void UndoRemoveElement(Control element, int index)
     {
         if (DrawingCanvas.Children.Contains(element)) return;
         var targetIndex = Math.Max(0, Math.Min(index, DrawingCanvas.Children.Count));
@@ -408,7 +360,7 @@ public partial class EditorWindow : Window
         SyncNumberCounterAfterRestore(element);
     }
 
-    internal void UndoCrop(BitmapSource previousImage, IReadOnlyList<UIElement> previousElements, int previousNumberCounter)
+    internal void UndoCrop(Bitmap previousImage, IReadOnlyList<Control> previousElements, int previousNumberCounter)
     {
         _originalImage = previousImage;
         DisplayImage();
@@ -424,7 +376,7 @@ public partial class EditorWindow : Window
         ClearSelection();
     }
 
-    internal void UndoResize(UIElement element, ElementState previousState)
+    internal void UndoResize(Control element, ElementState previousState)
     {
         ApplyElementState(element, previousState);
     }
@@ -432,12 +384,11 @@ public partial class EditorWindow : Window
     private void DisplayImage()
     {
         ImageDisplay.Source = _originalImage;
-        ImageDisplay.Width = _originalImage.PixelWidth;
-        ImageDisplay.Height = _originalImage.PixelHeight;
-        
-        // Update canvas size to match image
-        DrawingCanvas.Width = _originalImage.PixelWidth;
-        DrawingCanvas.Height = _originalImage.PixelHeight;
+        ImageDisplay.Width = _originalImage.PixelSize.Width;
+        ImageDisplay.Height = _originalImage.PixelSize.Height;
+
+        DrawingCanvas.Width = _originalImage.PixelSize.Width;
+        DrawingCanvas.Height = _originalImage.PixelSize.Height;
     }
 
     private Point ClampToCanvasBounds(Point point)
@@ -461,9 +412,9 @@ public partial class EditorWindow : Window
                fontSizeEqual;
     }
 
-    private static ElementState? CaptureElementState(UIElement element)
+    private static ElementState? CaptureElementState(Control element)
     {
-        if (element is Shape shape && element is not Line && element is not Path)
+        if (element is Shape shape && element is not Line && element is not Avalonia.Controls.Shapes.Path)
         {
             return new ElementState(CanvasPosition.GetLeft(shape), CanvasPosition.GetTop(shape), shape.Width, shape.Height, null);
         }
@@ -471,15 +422,15 @@ public partial class EditorWindow : Window
         if (element is TextBlock textBlock)
         {
             textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            var width = textBlock.ActualWidth > 0 ? textBlock.ActualWidth : textBlock.DesiredSize.Width;
-            var height = textBlock.ActualHeight > 0 ? textBlock.ActualHeight : textBlock.DesiredSize.Height;
+            var width = textBlock.Bounds.Width > 0 ? textBlock.Bounds.Width : textBlock.DesiredSize.Width;
+            var height = textBlock.Bounds.Height > 0 ? textBlock.Bounds.Height : textBlock.DesiredSize.Height;
             return new ElementState(CanvasPosition.GetLeft(textBlock), CanvasPosition.GetTop(textBlock), width, height, textBlock.FontSize);
         }
 
         return null;
     }
 
-    private void ApplyElementState(UIElement element, ElementState state)
+    private void ApplyElementState(Control element, ElementState state)
     {
         if (element is Shape shape && element is not Line)
         {
@@ -513,24 +464,16 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void Canvas_MouseDown(object sender, MouseButtonEventArgs e)
+    private void Canvas_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed)
+        if (!e.GetCurrentPoint(DrawingCanvas).Properties.IsLeftButtonPressed)
             return;
 
-        // Cursor-mode operations (drag/resize) use the raw position so that
-        // clamping does not corrupt _resizeStartPoint / _dragStartPoint and
-        // cause snap jumps when the cursor re-enters the canvas.
-        // Drawing tools use the clamped position to stay within the image bounds.
         var rawPoint = e.GetPosition(DrawingCanvas);
         var clickPoint = _currentTool == AnnotationTool.Cursor
             ? rawPoint
             : ClampToCanvasBounds(rawPoint);
 
-        // Handle cursor mode for selection and moving.
-        // Resize handles attach their own MouseLeftButtonDown handler and mark
-        // the event Handled, so the canvas only sees clicks on the canvas
-        // background or on annotation elements.
         if (_currentTool == AnnotationTool.Cursor)
         {
             var hitElement = FindElementAtPoint(rawPoint);
@@ -540,7 +483,7 @@ public partial class EditorWindow : Window
                 SelectElement(hitElement);
                 _isDragging = true;
                 _dragStartPoint = rawPoint;
-                DrawingCanvas.CaptureMouse();
+                e.Pointer.Capture(DrawingCanvas);
             }
             else
             {
@@ -549,40 +492,44 @@ public partial class EditorWindow : Window
             return;
         }
 
-        // Handle crop mode
         if (_currentTool == AnnotationTool.Crop)
         {
             _isCropping = true;
             _startPoint = clickPoint;
-            
-            // Remove existing crop rectangle if any
+
             if (_cropRectangle != null)
             {
                 DrawingCanvas.Children.Remove(_cropRectangle);
             }
-            
+
             _cropRectangle = new Rectangle
             {
                 Stroke = new SolidColorBrush(Colors.Yellow),
                 StrokeThickness = 2,
-                StrokeDashArray = new System.Windows.Media.DoubleCollection(new[] { 4.0, 2.0 }),
+                StrokeDashArray = new AvaloniaList<double>(new[] { 4.0, 2.0 }),
                 Fill = new SolidColorBrush(Color.FromArgb(50, 255, 255, 0))
             };
-            
+
             DrawingCanvas.Children.Add(_cropRectangle);
-            DrawingCanvas.CaptureMouse();
+            e.Pointer.Capture(DrawingCanvas);
             return;
         }
 
         if (_currentTool == AnnotationTool.None)
             return;
 
+        if (_currentTool == AnnotationTool.Text)
+        {
+            _ = HandleTextToolAsync();
+            return;
+        }
+
         _isDrawing = true;
         _startPoint = clickPoint;
         _lastDrawPoint = clickPoint;
-        DrawingCanvas.CaptureMouse();
+        e.Pointer.Capture(DrawingCanvas);
 
-        UIElement? element = _currentTool switch
+        Control? element = _currentTool switch
         {
             AnnotationTool.Rectangle => CreateRectangle(),
             AnnotationTool.Circle => CreateEllipse(),
@@ -590,7 +537,6 @@ public partial class EditorWindow : Window
             AnnotationTool.Line => CreateLine(),
             AnnotationTool.Freehand => CreatePolyline(),
             AnnotationTool.Number => CreateNumberLabel(),
-            AnnotationTool.Text => CreateTextLabel(),
             AnnotationTool.Blur => CreateBlurRectangle(),
             _ => null
         };
@@ -609,40 +555,43 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void Canvas_MouseMove(object sender, MouseEventArgs e)
+    private async Task HandleTextToolAsync()
     {
-        // Raw position for cursor-mode (drag/resize) to avoid ClampToCanvasBounds
-        // freezing _dragStartPoint at the canvas edge and causing jump-snaps when
-        // the cursor re-enters from a different position.
+        var textBlock = await CreateTextLabelAsync();
+        if (textBlock != null)
+        {
+            DrawingCanvas.Children.Add(textBlock);
+            _undo.Push(new UndoController.AddElementUndoAction(textBlock));
+        }
+    }
+
+    private void Canvas_PointerMoved(object? sender, PointerEventArgs e)
+    {
         var rawPoint = e.GetPosition(DrawingCanvas);
         var currentPoint = ClampToCanvasBounds(rawPoint);
 
-        // Handle resizing – use raw (unclamped) position
         if (_currentTool == AnnotationTool.Cursor && _isResizing && _selectedElement != null)
         {
             ResizeElement(_selectedElement, rawPoint);
             return;
         }
 
-        // Endpoint resize for Line/Path (arrow)
         if (_currentTool == AnnotationTool.Cursor && _isEndpointResizing && _selectedElement != null)
         {
             ApplyEndpointResize(_selectedElement, rawPoint);
             return;
         }
 
-        // Handle cursor mode for dragging elements – use raw (unclamped) position
         if (_currentTool == AnnotationTool.Cursor && _isDragging && _selectedElement != null)
         {
             var deltaX = rawPoint.X - _dragStartPoint.X;
             var deltaY = rawPoint.Y - _dragStartPoint.Y;
-            
+
             MoveElement(_selectedElement, deltaX, deltaY);
             _dragStartPoint = rawPoint;
             return;
         }
 
-        // Handle crop mode
         if (_currentTool == AnnotationTool.Crop && _isCropping && _cropRectangle != null)
         {
             var x = Math.Min(_startPoint.X, currentPoint.X);
@@ -693,12 +642,9 @@ public partial class EditorWindow : Window
         _lastDrawPoint = currentPoint;
     }
 
-    private void Canvas_MouseUp(object sender, MouseButtonEventArgs e)
+    private async void Canvas_PointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (DrawingCanvas.IsMouseCaptured)
-        {
-            DrawingCanvas.ReleaseMouseCapture();
-        }
+        e.Pointer.Capture(null);
 
         if (_currentTool == AnnotationTool.Cursor)
         {
@@ -712,8 +658,6 @@ public partial class EditorWindow : Window
             }
             else if (_isEndpointResizing && _selectedElement != null)
             {
-                // Endpoint resize finished — refresh selection so the bounding border + handles
-                // sit on top of the new geometry.
                 var element = _selectedElement;
                 ClearSelection();
                 SelectElement(element);
@@ -732,20 +676,16 @@ public partial class EditorWindow : Window
             _isCropping = false;
             if (_cropRectangle != null && _cropRectangle.Width > 10 && _cropRectangle.Height > 10)
             {
-                // Ask user to confirm crop
-                var result = MessageBox.Show(
+                var result = await SimpleMessageBox.ShowAsync(this,
                     "Apply crop to image? This will remove all annotations and crop the image.",
-                    "Confirm Crop",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
+                    "Confirm Crop", SimpleMessageBoxButtons.YesNo);
 
-                if (result == MessageBoxResult.Yes)
+                if (result == SimpleMessageBoxResult.Yes)
                 {
                     ApplyCrop();
                 }
                 else
                 {
-                    // Remove crop rectangle
                     DrawingCanvas.Children.Remove(_cropRectangle);
                     _cropRectangle = null;
                 }
@@ -755,10 +695,8 @@ public partial class EditorWindow : Window
 
         if (_isDrawing && _currentShape != null)
         {
-            // Apply pixelation effect if this is a pixelate rectangle
             if (_currentTool == AnnotationTool.Blur && _currentShape is Rectangle pixelateRect)
             {
-                // Only apply pixelation if the rectangle has a reasonable size
                 if (pixelateRect.Width > 5 && pixelateRect.Height > 5)
                 {
                     pixelateRect.Fill = CanvasRenderer.CreatePixelatedBrush(pixelateRect, _originalImage);
@@ -767,13 +705,12 @@ public partial class EditorWindow : Window
             _undo.Push(new UndoController.AddElementUndoAction(_currentShape));
         }
 
-        // Handle freehand polyline
         if (_isDrawing && _currentPolyline != null)
         {
             _undo.Push(new UndoController.AddElementUndoAction(_currentPolyline));
             _currentPolyline = null;
         }
-        
+
         _isDrawing = false;
         _currentShape = null;
     }
@@ -814,22 +751,19 @@ public partial class EditorWindow : Window
         {
             Stroke = new SolidColorBrush(_currentColor),
             StrokeThickness = _lineThickness,
-            X1 = _startPoint.X,
-            Y1 = _startPoint.Y,
-            X2 = _startPoint.X,
-            Y2 = _startPoint.Y
+            StartPoint = _startPoint,
+            EndPoint = _startPoint
         };
     }
 
-    private Path CreateArrow()
+    private Avalonia.Controls.Shapes.Path CreateArrow()
     {
-        var path = new Path
+        return new Avalonia.Controls.Shapes.Path
         {
             Stroke = new SolidColorBrush(_currentColor),
             StrokeThickness = _lineThickness,
             Fill = new SolidColorBrush(_currentColor)
         };
-        return path;
     }
 
     private Polyline CreatePolyline()
@@ -838,9 +772,8 @@ public partial class EditorWindow : Window
         {
             Stroke = new SolidColorBrush(_currentColor),
             StrokeThickness = _lineThickness,
-            StrokeLineJoin = PenLineJoin.Round,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
         };
         polyline.Points.Add(_startPoint);
         _currentPolyline = polyline;
@@ -853,7 +786,7 @@ public partial class EditorWindow : Window
         {
             Text = _numberCounter.ToString(),
             FontSize = 20,
-            FontWeight = FontWeights.Bold,
+            FontWeight = FontWeight.Bold,
             Foreground = new SolidColorBrush(_currentColor),
             Background = new SolidColorBrush(Colors.White),
             Padding = new Thickness(5),
@@ -862,23 +795,22 @@ public partial class EditorWindow : Window
         Canvas.SetLeft(textBlock, _startPoint.X);
         Canvas.SetTop(textBlock, _startPoint.Y);
         _numberCounter++;
-        _isDrawing = false; // Numbers don't need drag
+        _isDrawing = false;
         return textBlock;
     }
 
-    private TextBlock? CreateTextLabel()
+    private async Task<TextBlock?> CreateTextLabelAsync()
     {
-        // Small modal prompt for the label text, styled from the cocoa theme.
+        var resources = Avalonia.Application.Current!.Resources;
         var inputDialog = new Window
         {
             Title = "Add text",
             Width = 340,
             SizeToContent = SizeToContent.Height,
-            ResizeMode = ResizeMode.NoResize,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = this,
-            Background = (Brush)FindResource("Cocoa.WindowBrush"),
-            Foreground = (Brush)FindResource("Cocoa.TextBrush")
+            Background = (IBrush)resources["Cocoa.WindowBrush"]!,
+            Foreground = (IBrush)resources["Cocoa.TextBrush"]!
         };
 
         var grid = new Grid { Margin = new Thickness(16) };
@@ -889,58 +821,54 @@ public partial class EditorWindow : Window
         var label = new TextBlock
         {
             Text = "Label text",
-            Foreground = (Brush)FindResource("Cocoa.TextSecondaryBrush"),
+            Foreground = (IBrush)resources["Cocoa.TextSecondaryBrush"]!,
             Margin = new Thickness(0, 0, 0, 6)
         };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
 
-        var textBox = new TextBox
-        {
-            Style = (Style)FindResource("CocoaTextBox"),
-            Margin = new Thickness(0, 0, 0, 14)
-        };
+        var textBox = new TextBox { Margin = new Thickness(0, 0, 0, 14) };
         Grid.SetRow(textBox, 1);
         grid.Children.Add(textBox);
 
         var okButton = new Button
         {
             Content = "Add",
-            Style = (Style)FindResource("AccentButton"),
+            Theme = (Avalonia.Styling.ControlTheme)resources["AccentButton"]!,
             MinWidth = 76,
             IsDefault = true
         };
-        okButton.Click += (s, e) => inputDialog.DialogResult = true;
 
         var cancelButton = new Button
         {
             Content = "Cancel",
-            Style = (Style)FindResource("SubtleButton"),
+            Theme = (Avalonia.Styling.ControlTheme)resources["SubtleButton"]!,
             MinWidth = 76,
             Margin = new Thickness(0, 0, 8, 0),
             IsCancel = true
         };
 
-        var buttonPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
+        var buttonPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         buttonPanel.Children.Add(cancelButton);
         buttonPanel.Children.Add(okButton);
         Grid.SetRow(buttonPanel, 2);
         grid.Children.Add(buttonPanel);
 
         inputDialog.Content = grid;
-        textBox.Focus();
 
-        if (inputDialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(textBox.Text))
+        okButton.Click += (_, _) => inputDialog.Close(true);
+        cancelButton.Click += (_, _) => inputDialog.Close(false);
+        inputDialog.Opened += (_, _) => textBox.Focus();
+
+        var confirmed = await inputDialog.ShowDialog<bool>(this);
+
+        if (confirmed && !string.IsNullOrWhiteSpace(textBox.Text))
         {
             var textBlock = new TextBlock
             {
                 Text = textBox.Text,
                 FontSize = 16,
-                FontWeight = FontWeights.Normal,
+                FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(_currentColor),
                 Background = new SolidColorBrush(_currentTextBackgroundColor),
                 Padding = new Thickness(5)
@@ -948,24 +876,22 @@ public partial class EditorWindow : Window
 
             Canvas.SetLeft(textBlock, _startPoint.X);
             Canvas.SetTop(textBlock, _startPoint.Y);
-            _isDrawing = false; // Text doesn't need drag
+            _isDrawing = false;
             return textBlock;
         }
 
-        _isDrawing = false; // Text doesn't need drag
+        _isDrawing = false;
         return null;
     }
 
     private Rectangle CreateBlurRectangle()
     {
-        // Create a rectangle that will pixelate the area underneath it
         var rect = new Rectangle
         {
             Stroke = new SolidColorBrush(Colors.Transparent),
             StrokeThickness = 0,
-            // Initially use a semi-transparent fill - will be replaced with pixelated image when drawn
             Fill = new SolidColorBrush(Color.FromArgb(128, 128, 128, 128)),
-            Tag = PixelateTag, // Tag to identify this as a pixelate rectangle
+            Tag = PixelateTag,
             Width = 0,
             Height = 0
         };
@@ -973,7 +899,7 @@ public partial class EditorWindow : Window
         Canvas.SetTop(rect, _startPoint.Y);
         return rect;
     }
-    
+
     private void UpdateRectangle(Point currentPoint)
     {
         if (_currentShape is not Rectangle rect) return;
@@ -1008,8 +934,7 @@ public partial class EditorWindow : Window
     {
         if (_currentShape is Line line)
         {
-            line.X2 = currentPoint.X;
-            line.Y2 = currentPoint.Y;
+            line.EndPoint = currentPoint;
         }
     }
 
@@ -1017,11 +942,10 @@ public partial class EditorWindow : Window
     {
         if (_currentPolyline != null && _currentPolyline.Points.Count > 0)
         {
-            // Add point if it's far enough from the last point to avoid too many points
             var lastPoint = _currentPolyline.Points[_currentPolyline.Points.Count - 1];
             var distance = Math.Sqrt(Math.Pow(currentPoint.X - lastPoint.X, 2) + Math.Pow(currentPoint.Y - lastPoint.Y, 2));
-            
-            if (distance > FreehandMinDistance) // Minimum distance threshold
+
+            if (distance > FreehandMinDistance)
             {
                 _currentPolyline.Points.Add(currentPoint);
             }
@@ -1030,23 +954,20 @@ public partial class EditorWindow : Window
 
     private void UpdateArrow(Point currentPoint)
     {
-        if (_currentShape is not Path arrow) return;
+        if (_currentShape is not Avalonia.Controls.Shapes.Path arrow) return;
 
         var dx = currentPoint.X - _startPoint.X;
         var dy = currentPoint.Y - _startPoint.Y;
         var angle = Math.Atan2(dy, dx);
         var length = Math.Sqrt(dx * dx + dy * dy);
 
-        // Create arrow geometry
         var geometry = new PathGeometry();
-        var figure = new PathFigure { StartPoint = _startPoint };
+        var figure = new PathFigure { StartPoint = _startPoint, IsClosed = false };
 
-        // Arrow line
-        figure.Segments.Add(new LineSegment(currentPoint, true));
+        figure.Segments!.Add(new LineSegment { Point = currentPoint });
 
-        // Arrow head
         var arrowHeadLength = Math.Min(20, length / 3);
-        var arrowHeadAngle = Math.PI / 6; // 30 degrees
+        var arrowHeadAngle = Math.PI / 6;
 
         var leftPoint = new Point(
             currentPoint.X - arrowHeadLength * Math.Cos(angle - arrowHeadAngle),
@@ -1057,27 +978,24 @@ public partial class EditorWindow : Window
             currentPoint.Y - arrowHeadLength * Math.Sin(angle + arrowHeadAngle)
         );
 
-        figure.Segments.Add(new LineSegment(leftPoint, false));
-        figure.Segments.Add(new LineSegment(currentPoint, true));
-        figure.Segments.Add(new LineSegment(rightPoint, true));
-        figure.Segments.Add(new LineSegment(currentPoint, true));
+        figure.Segments.Add(new LineSegment { Point = leftPoint });
+        figure.Segments.Add(new LineSegment { Point = currentPoint });
+        figure.Segments.Add(new LineSegment { Point = rightPoint });
+        figure.Segments.Add(new LineSegment { Point = currentPoint });
 
-        geometry.Figures.Add(figure);
+        geometry.Figures!.Add(figure);
         arrow.Data = geometry;
     }
 
-    private UIElement? FindElementAtPoint(Point point)
+    private Control? FindElementAtPoint(Point point)
     {
-        // Search through canvas children in reverse order (top to bottom)
         for (int i = DrawingCanvas.Children.Count - 1; i >= 0; i--)
         {
             var element = DrawingCanvas.Children[i];
-            
-            // Skip the selection border and resize handles
+
             if (element == _selectionBorder || _resizeHandles.Contains(element))
                 continue;
-            
-            // Check if point is within element bounds
+
             if (IsPointInElement(element, point))
             {
                 return element;
@@ -1086,49 +1004,46 @@ public partial class EditorWindow : Window
         return null;
     }
 
-    private bool IsPointInElement(UIElement element, Point point)
+    private bool IsPointInElement(Control element, Point point)
     {
         var left = CanvasPosition.GetLeft(element);
         var top = CanvasPosition.GetTop(element);
 
-        if (element is Path path)
+        if (element is Avalonia.Controls.Shapes.Path path)
         {
-            // For paths (arrows), use geometry-based hit testing
             if (path.Data is PathGeometry pathGeometry)
             {
-                // Adjust point for canvas positioning
                 var adjustedPoint = new Point(point.X - left, point.Y - top);
-                return pathGeometry.FillContains(adjustedPoint) || 
+                return pathGeometry.FillContains(adjustedPoint) ||
                        pathGeometry.StrokeContains(HitTestPen, adjustedPoint);
             }
             return false;
         }
-        else if (element is Shape shape && !(element is Line))
+        else if (element is Shape shape && element is not Line)
         {
             var width = shape.Width;
             var height = shape.Height;
-            
+
             if (double.IsNaN(width) || double.IsNaN(height))
                 return false;
-                
+
             return point.X >= left && point.X <= left + width &&
                    point.Y >= top && point.Y <= top + height;
         }
         else if (element is TextBlock textBlock)
         {
-            var width = textBlock.ActualWidth;
-            var height = textBlock.ActualHeight;
-            
+            var width = textBlock.Bounds.Width;
+            var height = textBlock.Bounds.Height;
+
             return point.X >= left && point.X <= left + width &&
                    point.Y >= top && point.Y <= top + height;
         }
         else if (element is Line line)
         {
-            // Check if point is near the line
-            var distance = DistanceFromPointToLine(point, new Point(line.X1, line.Y1), new Point(line.X2, line.Y2));
-            return distance < 10; // 10 pixel tolerance
+            var distance = DistanceFromPointToLine(point, line.StartPoint, line.EndPoint);
+            return distance < 10;
         }
-        
+
         return false;
     }
 
@@ -1137,23 +1052,22 @@ public partial class EditorWindow : Window
         var dx = lineEnd.X - lineStart.X;
         var dy = lineEnd.Y - lineStart.Y;
         var lengthSquared = dx * dx + dy * dy;
-        
+
         if (lengthSquared == 0)
             return Math.Sqrt((p.X - lineStart.X) * (p.X - lineStart.X) + (p.Y - lineStart.Y) * (p.Y - lineStart.Y));
-        
+
         var t = Math.Max(0, Math.Min(1, ((p.X - lineStart.X) * dx + (p.Y - lineStart.Y) * dy) / lengthSquared));
         var projX = lineStart.X + t * dx;
         var projY = lineStart.Y + t * dy;
-        
+
         return Math.Sqrt((p.X - projX) * (p.X - projX) + (p.Y - projY) * (p.Y - projY));
     }
 
-    private void SelectElement(UIElement element)
+    private void SelectElement(Control element)
     {
         ClearSelection();
         _selectedElement = element;
 
-        // Add visual indicator for selection
         _selectionBorder = new Border
         {
             BorderBrush = SelectionBrush,
@@ -1165,31 +1079,30 @@ public partial class EditorWindow : Window
         var top = CanvasPosition.GetTop(element);
         double width = 0, height = 0;
 
-        if (element is Path path && path.Data is { } pathData)
+        if (element is Avalonia.Controls.Shapes.Path path && path.Data is { } pathData)
         {
-            // For paths (arrows), get bounds from geometry
             var bounds = pathData.Bounds;
             left += bounds.Left;
             top += bounds.Top;
             width = bounds.Width;
             height = bounds.Height;
         }
-        else if (element is Shape shape && element is not Line && element is not Path)
+        else if (element is Shape shape && element is not Line && element is not Avalonia.Controls.Shapes.Path)
         {
             width = shape.Width;
             height = shape.Height;
         }
         else if (element is TextBlock textBlock)
         {
-            width = textBlock.ActualWidth;
-            height = textBlock.ActualHeight;
+            width = textBlock.Bounds.Width;
+            height = textBlock.Bounds.Height;
         }
         else if (element is Line line)
         {
-            left = Math.Min(line.X1, line.X2);
-            top = Math.Min(line.Y1, line.Y2);
-            width = Math.Abs(line.X2 - line.X1);
-            height = Math.Abs(line.Y2 - line.Y1);
+            left = Math.Min(line.StartPoint.X, line.EndPoint.X);
+            top = Math.Min(line.StartPoint.Y, line.EndPoint.Y);
+            width = Math.Abs(line.EndPoint.X - line.StartPoint.X);
+            height = Math.Abs(line.EndPoint.Y - line.StartPoint.Y);
         }
 
         Canvas.SetLeft(_selectionBorder, left - 2);
@@ -1199,19 +1112,15 @@ public partial class EditorWindow : Window
 
         DrawingCanvas.Children.Add(_selectionBorder);
 
-        // Choose handle style by element type:
-        //   - Shape (rect/ellipse) and TextBlock get the 8-handle bounding-box layout.
-        //   - Line and Path (arrow) get a 2-handle endpoint layout so each end can be moved
-        //     independently without distorting the geometry.
-        if ((element is Shape s && element is not Line && element is not Path) || element is TextBlock)
+        if ((element is Shape && element is not Line && element is not Avalonia.Controls.Shapes.Path) || element is TextBlock)
         {
             CreateResizeHandles(left, top, width, height);
         }
         else if (element is Line lineEl)
         {
-            CreateEndpointHandles(new Point(lineEl.X1, lineEl.Y1), new Point(lineEl.X2, lineEl.Y2));
+            CreateEndpointHandles(lineEl.StartPoint, lineEl.EndPoint);
         }
-        else if (element is Path arrowEl)
+        else if (element is Avalonia.Controls.Shapes.Path arrowEl)
         {
             var (start, end) = TryGetArrowEndpoints(arrowEl);
             if (start.HasValue && end.HasValue)
@@ -1227,15 +1136,14 @@ public partial class EditorWindow : Window
 
         var handleColor = SelectionBrush;
 
-        // 8-handle bounding box. Corner handles drive proportional resize, edges drive single-axis.
-        _resizeHandles.Add(CreateResizeHandle(left - 2,                  top - 2,                   handleColor, ElementResizeMode.TopLeft));
-        _resizeHandles.Add(CreateResizeHandle(left + width + 2,          top - 2,                   handleColor, ElementResizeMode.TopRight));
-        _resizeHandles.Add(CreateResizeHandle(left - 2,                  top + height + 2,          handleColor, ElementResizeMode.BottomLeft));
-        _resizeHandles.Add(CreateResizeHandle(left + width + 2,          top + height + 2,          handleColor, ElementResizeMode.BottomRight));
-        _resizeHandles.Add(CreateResizeHandle(left + width / 2,          top - 2,                   handleColor, ElementResizeMode.Top));
-        _resizeHandles.Add(CreateResizeHandle(left + width / 2,          top + height + 2,          handleColor, ElementResizeMode.Bottom));
-        _resizeHandles.Add(CreateResizeHandle(left - 2,                  top + height / 2,          handleColor, ElementResizeMode.Left));
-        _resizeHandles.Add(CreateResizeHandle(left + width + 2,          top + height / 2,          handleColor, ElementResizeMode.Right));
+        _resizeHandles.Add(CreateResizeHandle(left - 2, top - 2, handleColor, ElementResizeMode.TopLeft));
+        _resizeHandles.Add(CreateResizeHandle(left + width + 2, top - 2, handleColor, ElementResizeMode.TopRight));
+        _resizeHandles.Add(CreateResizeHandle(left - 2, top + height + 2, handleColor, ElementResizeMode.BottomLeft));
+        _resizeHandles.Add(CreateResizeHandle(left + width + 2, top + height + 2, handleColor, ElementResizeMode.BottomRight));
+        _resizeHandles.Add(CreateResizeHandle(left + width / 2, top - 2, handleColor, ElementResizeMode.Top));
+        _resizeHandles.Add(CreateResizeHandle(left + width / 2, top + height + 2, handleColor, ElementResizeMode.Bottom));
+        _resizeHandles.Add(CreateResizeHandle(left - 2, top + height / 2, handleColor, ElementResizeMode.Left));
+        _resizeHandles.Add(CreateResizeHandle(left + width + 2, top + height / 2, handleColor, ElementResizeMode.Right));
     }
 
     private void CreateEndpointHandles(Point start, Point end)
@@ -1243,7 +1151,7 @@ public partial class EditorWindow : Window
         ClearResizeHandlesOnly();
         var handleColor = SelectionBrush;
         var startHandle = CreateEndpointHandle(start, handleColor, isStart: true);
-        var endHandle   = CreateEndpointHandle(end,   handleColor, isStart: false);
+        var endHandle = CreateEndpointHandle(end, handleColor, isStart: false);
         _resizeHandles.Add(startHandle);
         _resizeHandles.Add(endHandle);
     }
@@ -1257,17 +1165,12 @@ public partial class EditorWindow : Window
         _resizeHandles.Clear();
     }
 
-    /// <summary>
-    /// Reads the start/end points back out of an arrow's PathGeometry. Mirror of the construction
-    /// done by <see cref="UpdateArrow"/> — first segment endpoint = StartPoint of the figure,
-    /// final destination = first LineSegment's Point.
-    /// </summary>
     private static void ShiftPathGeometry(PathGeometry geometry, double deltaX, double deltaY)
     {
-        foreach (var figure in geometry.Figures)
+        foreach (var figure in geometry.Figures!)
         {
             figure.StartPoint = new Point(figure.StartPoint.X + deltaX, figure.StartPoint.Y + deltaY);
-            foreach (var seg in figure.Segments)
+            foreach (var seg in figure.Segments!)
             {
                 if (seg is LineSegment ls)
                 {
@@ -1277,11 +1180,11 @@ public partial class EditorWindow : Window
         }
     }
 
-    private static (Point? start, Point? end) TryGetArrowEndpoints(Path arrow)
+    private static (Point? start, Point? end) TryGetArrowEndpoints(Avalonia.Controls.Shapes.Path arrow)
     {
-        if (arrow.Data is not PathGeometry geometry || geometry.Figures.Count == 0) return (null, null);
+        if (arrow.Data is not PathGeometry geometry || geometry.Figures == null || geometry.Figures.Count == 0) return (null, null);
         var figure = geometry.Figures[0];
-        if (figure.Segments.Count == 0 || figure.Segments[0] is not LineSegment line) return (null, null);
+        if (figure.Segments == null || figure.Segments.Count == 0 || figure.Segments[0] is not LineSegment line) return (null, null);
         return (figure.StartPoint, line.Point);
     }
 
@@ -1293,15 +1196,14 @@ public partial class EditorWindow : Window
             return;
         }
 
-        // Handles are positioned by the centre of their hit zone, matching CreateResizeHandle.
-        PositionHandle(_resizeHandles[0], left - 2,                  top - 2);
-        PositionHandle(_resizeHandles[1], left + width + 2,          top - 2);
-        PositionHandle(_resizeHandles[2], left - 2,                  top + height + 2);
-        PositionHandle(_resizeHandles[3], left + width + 2,          top + height + 2);
-        PositionHandle(_resizeHandles[4], left + width / 2,          top - 2);
-        PositionHandle(_resizeHandles[5], left + width / 2,          top + height + 2);
-        PositionHandle(_resizeHandles[6], left - 2,                  top + height / 2);
-        PositionHandle(_resizeHandles[7], left + width + 2,          top + height / 2);
+        PositionHandle(_resizeHandles[0], left - 2, top - 2);
+        PositionHandle(_resizeHandles[1], left + width + 2, top - 2);
+        PositionHandle(_resizeHandles[2], left - 2, top + height + 2);
+        PositionHandle(_resizeHandles[3], left + width + 2, top + height + 2);
+        PositionHandle(_resizeHandles[4], left + width / 2, top - 2);
+        PositionHandle(_resizeHandles[5], left + width / 2, top + height + 2);
+        PositionHandle(_resizeHandles[6], left - 2, top + height / 2);
+        PositionHandle(_resizeHandles[7], left + width + 2, top + height / 2);
     }
 
     private static void PositionHandle(Rectangle handle, double centerX, double centerY)
@@ -1309,67 +1211,49 @@ public partial class EditorWindow : Window
         Canvas.SetLeft(handle, centerX - handle.Width / 2);
         Canvas.SetTop(handle, centerY - handle.Height / 2);
     }
-    
-    private static Cursor GetResizeCursor(ElementResizeMode resizeMode)
+
+    private static StandardCursorType GetResizeCursor(ElementResizeMode resizeMode)
     {
         return resizeMode switch
         {
-            ElementResizeMode.TopLeft => Cursors.SizeNWSE,
-            ElementResizeMode.BottomRight => Cursors.SizeNWSE,
-            ElementResizeMode.TopRight => Cursors.SizeNESW,
-            ElementResizeMode.BottomLeft => Cursors.SizeNESW,
-            ElementResizeMode.Top => Cursors.SizeNS,
-            ElementResizeMode.Bottom => Cursors.SizeNS,
-            ElementResizeMode.Left => Cursors.SizeWE,
-            ElementResizeMode.Right => Cursors.SizeWE,
-            _ => Cursors.SizeAll
+            ElementResizeMode.TopLeft => StandardCursorType.TopLeftCorner,
+            ElementResizeMode.BottomRight => StandardCursorType.BottomRightCorner,
+            ElementResizeMode.TopRight => StandardCursorType.TopRightCorner,
+            ElementResizeMode.BottomLeft => StandardCursorType.BottomLeftCorner,
+            ElementResizeMode.Top => StandardCursorType.TopSide,
+            ElementResizeMode.Bottom => StandardCursorType.BottomSide,
+            ElementResizeMode.Left => StandardCursorType.LeftSide,
+            ElementResizeMode.Right => StandardCursorType.RightSide,
+            _ => StandardCursorType.SizeAll
         };
     }
 
-    /// <summary>
-    /// Builds a resize handle whose hit zone is finger-sized (24×24) but whose visible square
-    /// stays small (12×12) so it doesn't dominate the canvas. The handle is a transparent
-    /// Rectangle of HandleHitZoneSize containing a smaller Rectangle of HandleVisualSize as its
-    /// fill via inner content; we cheat by using a Rectangle with a partially transparent fill
-    /// — see the comment below — because Rectangle is the only Shape that natively works here
-    /// without a wrapper.
-    /// </summary>
     private Rectangle CreateResizeHandle(double centerX, double centerY, SolidColorBrush color, ElementResizeMode resizeMode)
     {
-        // Use the visible-size Rectangle as the hit target. The hit area is enlarged via a
-        // hidden expanded Border behind the visible square. To keep the implementation simple
-        // we just make the actual Rectangle the hit-zone size with a small inner painted area.
-        // (Implemented as a single Rectangle with hit-zone dimensions but a clipped visual.)
         var handle = new Rectangle
         {
             Width = HandleHitZoneSize,
             Height = HandleHitZoneSize,
-            Fill = Brushes.Transparent, // hit zone — invisible
-            Cursor = GetResizeCursor(resizeMode),
+            Fill = Brushes.Transparent,
+            Cursor = new Cursor(GetResizeCursor(resizeMode)),
             Tag = resizeMode
         };
-        // Layer a smaller visible square on top via a SolidColorBrush DrawingBrush so the user
-        // sees a 12×12 marker but can click anywhere in the 24×24 zone.
         var inset = (HandleHitZoneSize - HandleVisualSize) / 2;
-        var visual = new DrawingGroup();
-        using (var dc = visual.Open())
+        var drawingGroup = new DrawingGroup();
+        drawingGroup.Children.Add(new GeometryDrawing
         {
-            dc.DrawRectangle(color, new Pen(Brushes.White, 1),
-                new Rect(inset, inset, HandleVisualSize, HandleVisualSize));
-        }
-        handle.OpacityMask = null;
-        handle.Fill = new DrawingBrush { Drawing = visual, Stretch = Stretch.None };
+            Brush = color,
+            Pen = new Pen(Brushes.White, 1),
+            Geometry = new RectangleGeometry(new Rect(inset, inset, HandleVisualSize, HandleVisualSize))
+        });
+        handle.Fill = new DrawingBrush { Drawing = drawingGroup, Stretch = Stretch.None };
 
-        handle.MouseLeftButtonDown += ResizeHandle_MouseLeftButtonDown;
+        handle.PointerPressed += ResizeHandle_PointerPressed;
         PositionHandle(handle, centerX, centerY);
         DrawingCanvas.Children.Add(handle);
         return handle;
     }
 
-    /// <summary>
-    /// Endpoint handles for Line/Path. Tagged with isStart=true/false instead of an
-    /// ElementResizeMode, since they drive a different code path (BeginEndpointResize).
-    /// </summary>
     private Rectangle CreateEndpointHandle(Point center, SolidColorBrush color, bool isStart)
     {
         var handle = new Rectangle
@@ -1377,19 +1261,19 @@ public partial class EditorWindow : Window
             Width = HandleHitZoneSize,
             Height = HandleHitZoneSize,
             Fill = Brushes.Transparent,
-            Cursor = Cursors.Cross,
+            Cursor = new Cursor(StandardCursorType.Cross),
             Tag = isStart ? EndpointTagStart : EndpointTagEnd
         };
         var inset = (HandleHitZoneSize - HandleVisualSize) / 2;
-        var visual = new DrawingGroup();
-        using (var dc = visual.Open())
+        var drawingGroup = new DrawingGroup();
+        drawingGroup.Children.Add(new GeometryDrawing
         {
-            dc.DrawEllipse(color, new Pen(Brushes.White, 1),
-                new Point(inset + HandleVisualSize / 2, inset + HandleVisualSize / 2),
-                HandleVisualSize / 2, HandleVisualSize / 2);
-        }
-        handle.Fill = new DrawingBrush { Drawing = visual, Stretch = Stretch.None };
-        handle.MouseLeftButtonDown += EndpointHandle_MouseLeftButtonDown;
+            Brush = color,
+            Pen = new Pen(Brushes.White, 1),
+            Geometry = new EllipseGeometry(new Rect(inset, inset, HandleVisualSize, HandleVisualSize))
+        });
+        handle.Fill = new DrawingBrush { Drawing = drawingGroup, Stretch = Stretch.None };
+        handle.PointerPressed += EndpointHandle_PointerPressed;
         PositionHandle(handle, center.X, center.Y);
         DrawingCanvas.Children.Add(handle);
         return handle;
@@ -1398,7 +1282,7 @@ public partial class EditorWindow : Window
     private const string EndpointTagStart = "endpoint:start";
     private const string EndpointTagEnd = "endpoint:end";
 
-    private void ResizeHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void ResizeHandle_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Rectangle handle || handle.Tag is not ElementResizeMode mode)
             return;
@@ -1409,7 +1293,7 @@ public partial class EditorWindow : Window
         e.Handled = true;
     }
 
-    private void EndpointHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void EndpointHandle_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Rectangle handle || handle.Tag is not string tag)
             return;
@@ -1419,16 +1303,17 @@ public partial class EditorWindow : Window
         var isStart = tag == EndpointTagStart;
         BeginEndpointResize(_selectedElement, isStart);
         e.Handled = true;
+        e.Pointer.Capture(DrawingCanvas);
     }
 
-    private void BeginEndpointResize(UIElement element, bool isStart)
+    private void BeginEndpointResize(Control element, bool isStart)
     {
         if (element is Line line)
         {
-            _originalEndpointStart = new Point(line.X1, line.Y1);
-            _originalEndpointEnd = new Point(line.X2, line.Y2);
+            _originalEndpointStart = line.StartPoint;
+            _originalEndpointEnd = line.EndPoint;
         }
-        else if (element is Path arrow)
+        else if (element is Avalonia.Controls.Shapes.Path arrow)
         {
             var (start, end) = TryGetArrowEndpoints(arrow);
             if (!start.HasValue || !end.HasValue) return;
@@ -1442,22 +1327,21 @@ public partial class EditorWindow : Window
 
         _isEndpointResizing = true;
         _isResizingEndpointStart = isStart;
-        DrawingCanvas.CaptureMouse();
     }
 
-    private void BeginResize(UIElement element, ElementResizeMode mode, Point startPoint)
+    private void BeginResize(Control element, ElementResizeMode mode, Point startPoint)
     {
         _isResizing = true;
         _resizeMode = mode;
         _resizeStartPoint = startPoint;
         _resizeStartState = CaptureElementState(element);
 
-        if (element is Shape shape && element is not Line && element is not Path)
+        if (element is Shape shape && element is not Line && element is not Avalonia.Controls.Shapes.Path)
         {
             var width = shape.Width;
             var height = shape.Height;
-            if (double.IsNaN(width) || width <= 0) width = shape.ActualWidth;
-            if (double.IsNaN(height) || height <= 0) height = shape.ActualHeight;
+            if (double.IsNaN(width) || width <= 0) width = shape.Bounds.Width;
+            if (double.IsNaN(height) || height <= 0) height = shape.Bounds.Height;
             if (double.IsNaN(width) || width <= 0) width = MinResizeDimension;
             if (double.IsNaN(height) || height <= 0) height = MinResizeDimension;
 
@@ -1471,8 +1355,8 @@ public partial class EditorWindow : Window
         else if (element is TextBlock textBlock)
         {
             textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            _originalWidth = textBlock.ActualWidth > 0 ? textBlock.ActualWidth : textBlock.DesiredSize.Width;
-            _originalHeight = textBlock.ActualHeight > 0 ? textBlock.ActualHeight : textBlock.DesiredSize.Height;
+            _originalWidth = textBlock.Bounds.Width > 0 ? textBlock.Bounds.Width : textBlock.DesiredSize.Width;
+            _originalHeight = textBlock.Bounds.Height > 0 ? textBlock.Bounds.Height : textBlock.DesiredSize.Height;
             if (_originalWidth <= 0) _originalWidth = MinResizeDimension;
             if (_originalHeight <= 0) _originalHeight = MinResizeDimension;
             _originalLeft = Canvas.GetLeft(textBlock);
@@ -1487,11 +1371,9 @@ public partial class EditorWindow : Window
             _resizeStartState = null;
             return;
         }
-
-        DrawingCanvas.CaptureMouse();
     }
-    
-    private void ResizeElement(UIElement element, Point currentPoint)
+
+    private void ResizeElement(Control element, Point currentPoint)
     {
         var deltaX = currentPoint.X - _resizeStartPoint.X;
         var deltaY = currentPoint.Y - _resizeStartPoint.Y;
@@ -1539,7 +1421,7 @@ public partial class EditorWindow : Window
                 break;
         }
 
-        if (element is Shape shape && element is not Line && element is not Path)
+        if (element is Shape shape && element is not Line && element is not Avalonia.Controls.Shapes.Path)
         {
             shape.Width = newWidth;
             shape.Height = newHeight;
@@ -1592,23 +1474,19 @@ public partial class EditorWindow : Window
         _selectedElement = null;
     }
 
-    private void ApplyEndpointResize(UIElement element, Point newEndpoint)
+    private void ApplyEndpointResize(Control element, Point newEndpoint)
     {
-        // Drive the moving endpoint to the cursor; the other endpoint stays anchored at its
-        // captured original position. Clamp to the canvas to avoid endpoints outside the image.
         var clamped = ClampToCanvasBounds(newEndpoint);
         var start = _isResizingEndpointStart ? clamped : _originalEndpointStart;
-        var end   = _isResizingEndpointStart ? _originalEndpointEnd : clamped;
+        var end = _isResizingEndpointStart ? _originalEndpointEnd : clamped;
 
         if (element is Line line)
         {
-            line.X1 = start.X; line.Y1 = start.Y;
-            line.X2 = end.X;   line.Y2 = end.Y;
+            line.StartPoint = start;
+            line.EndPoint = end;
         }
-        else if (element is Path arrow)
+        else if (element is Avalonia.Controls.Shapes.Path arrow)
         {
-            // Reuse UpdateArrow's geometry construction by temporarily swapping _startPoint /
-            // _currentShape — that keeps a single source of truth for arrowhead math.
             var savedShape = _currentShape;
             var savedStart = _startPoint;
             _currentShape = arrow;
@@ -1618,7 +1496,6 @@ public partial class EditorWindow : Window
             _startPoint = savedStart;
         }
 
-        // Move the live handle marker to the cursor so the user has visual feedback.
         if (_resizeHandles.Count == 2)
         {
             var movingHandle = _isResizingEndpointStart ? _resizeHandles[0] : _resizeHandles[1];
@@ -1626,7 +1503,7 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void MoveElement(UIElement element, double deltaX, double deltaY)
+    private void MoveElement(Control element, double deltaX, double deltaY)
     {
         if (element is Shape shape && element is not Line)
         {
@@ -1640,26 +1517,21 @@ public partial class EditorWindow : Window
         }
         else if (element is Line line)
         {
-            line.X1 += deltaX;
-            line.Y1 += deltaY;
-            line.X2 += deltaX;
-            line.Y2 += deltaY;
+            line.StartPoint = new Point(line.StartPoint.X + deltaX, line.StartPoint.Y + deltaY);
+            line.EndPoint = new Point(line.EndPoint.X + deltaX, line.EndPoint.Y + deltaY);
         }
-        else if (element is Path path && path.Data is PathGeometry geometry)
+        else if (element is Avalonia.Controls.Shapes.Path pathEl && pathEl.Data is PathGeometry geometry)
         {
-            // Shift the geometry's points directly so the geometry stays canvas-absolute
-            // (lets TryGetArrowEndpoints + endpoint handles read positions without offset math).
             ShiftPathGeometry(geometry, deltaX, deltaY);
         }
 
-        // Update selection border position
         if (_selectionBorder != null)
         {
             Canvas.SetLeft(_selectionBorder, CanvasPosition.GetLeft(_selectionBorder) + deltaX);
             Canvas.SetTop(_selectionBorder, CanvasPosition.GetTop(_selectionBorder) + deltaY);
         }
 
-        if ((element is Shape && element is not Line && element is not Path) || element is TextBlock)
+        if ((element is Shape && element is not Line && element is not Avalonia.Controls.Shapes.Path) || element is TextBlock)
         {
             var elementLeft = CanvasPosition.GetLeft(element);
             var elementTop = CanvasPosition.GetTop(element);
@@ -1668,10 +1540,8 @@ public partial class EditorWindow : Window
             double elementHeight;
             if (element is TextBlock textBlock2)
             {
-                elementWidth = textBlock2.ActualWidth;
-                elementHeight = textBlock2.ActualHeight;
-                if (elementWidth <= 0) elementWidth = textBlock2.RenderSize.Width;
-                if (elementHeight <= 0) elementHeight = textBlock2.RenderSize.Height;
+                elementWidth = textBlock2.Bounds.Width;
+                elementHeight = textBlock2.Bounds.Height;
             }
             else if (element is Shape shapeElement)
             {
@@ -1688,10 +1558,8 @@ public partial class EditorWindow : Window
                 UpdateResizeHandles(elementLeft, elementTop, elementWidth, elementHeight);
             }
         }
-        else if (element is Line || element is Path)
+        else if (element is Line || element is Avalonia.Controls.Shapes.Path)
         {
-            // Endpoint handles need to follow Line/Path moves too. Re-running SelectElement
-            // is the simplest correct path — it rebuilds the bounding border + endpoint handles.
             ClearResizeHandlesOnly();
             if (_selectionBorder != null) DrawingCanvas.Children.Remove(_selectionBorder);
             _selectionBorder = null;
@@ -1699,7 +1567,7 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void ToolButton_Click(object sender, RoutedEventArgs e)
+    private void ToolButton_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.Tag is string toolName)
         {
@@ -1710,29 +1578,27 @@ public partial class EditorWindow : Window
         }
     }
 
-    /// <summary>
-    /// Switches the active tool and highlights its toolbar button. Used by both toolbar clicks
-    /// and keyboard shortcuts so the highlight never goes out of sync with the actual tool.
-    /// </summary>
     private void SelectTool(AnnotationTool tool)
     {
         _currentTool = tool;
-        var normalStyle = (Style)FindResource("ToolButton");
-        var activeStyle = (Style)FindResource("ToolButtonActive");
+        var resources = Avalonia.Application.Current!.Resources;
+        var normalTheme = (Avalonia.Styling.ControlTheme)resources["ToolButton"]!;
+        var activeTheme = (Avalonia.Styling.ControlTheme)resources["ToolButtonActive"]!;
         var toolName = tool.ToString();
         foreach (var child in ToolButtonsPanel.Children)
         {
             if (child is Button b && b.Tag is string tag)
             {
-                b.Style = tag == toolName ? activeStyle : normalStyle;
+                b.Theme = tag == toolName ? activeTheme : normalTheme;
             }
         }
     }
 
-    private void CustomColorButton_Click(object sender, RoutedEventArgs e)
+    private void CustomColorButton_Click(object? sender, RoutedEventArgs e)
     {
-        // Re-use the WinForms ColorDialog (already in our framework refs) rather than hand-rolling
-        // an HSL picker — the OS picker is what most users expect and supports the full palette.
+        // Re-use the WinForms ColorDialog (already referenced for this reason — see
+        // MoneyShot.UI.csproj) rather than hand-rolling an HSL picker — the OS picker is what
+        // most users expect and supports the full palette. Matches the WPF build's reasoning.
         using var dlg = new System.Windows.Forms.ColorDialog
         {
             FullOpen = true,
@@ -1753,39 +1619,35 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void StrokeThicknessSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    private void StrokeThicknessSlider_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
     {
         _lineThickness = (int)Math.Round(e.NewValue);
         if (StrokeThicknessLabel != null) StrokeThicknessLabel.Text = _lineThickness.ToString();
-        // Live-update the selected element's stroke if it's a shape that supports it.
-        if (_selectedElement is Shape shape && _selectedElement is not Path)
+        if (_selectedElement is Shape shape && _selectedElement is not Avalonia.Controls.Shapes.Path)
         {
             shape.StrokeThickness = _lineThickness;
         }
     }
 
-    private void ShortcutsHelp_Click(object sender, RoutedEventArgs e) => ToggleShortcutsOverlay();
+    private void ShortcutsHelp_Click(object? sender, RoutedEventArgs e) => ToggleShortcutsOverlay();
 
-    private void ShortcutsOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void ShortcutsOverlay_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (ShortcutsOverlay != null) ShortcutsOverlay.Visibility = Visibility.Collapsed;
+        if (ShortcutsOverlay != null) ShortcutsOverlay.IsVisible = false;
     }
 
     private void ToggleShortcutsOverlay()
     {
         if (ShortcutsOverlay == null) return;
-        ShortcutsOverlay.Visibility = ShortcutsOverlay.Visibility == Visibility.Visible
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        ShortcutsOverlay.IsVisible = !ShortcutsOverlay.IsVisible;
     }
 
-    private void ColorButton_Click(object sender, RoutedEventArgs e)
+    private void ColorButton_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.Background is SolidColorBrush brush)
         {
             _currentColor = brush.Color;
-            
-            // If an element is selected, change its color
+
             if (_selectedElement != null)
             {
                 ChangeElementColor(_selectedElement, _currentColor);
@@ -1793,7 +1655,7 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void TextBackgroundComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void TextBackgroundComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (TextBackgroundComboBox.SelectedItem is not ComboBoxItem selectedItem)
         {
@@ -1817,20 +1679,20 @@ public partial class EditorWindow : Window
             selectedText.Background = new SolidColorBrush(_currentTextBackgroundColor);
         }
     }
-    
-    private void ChangeElementColor(UIElement element, Color newColor)
+
+    private void ChangeElementColor(Control element, Color newColor)
     {
         if (!IsColorChangeableElement(element))
             return;
-            
+
         var brush = new SolidColorBrush(newColor);
-        
+
         if (element is Shape shape)
         {
             shape.Stroke = brush;
-            if (element is Path path)
+            if (element is Avalonia.Controls.Shapes.Path path)
             {
-                path.Fill = brush; // Arrows use fill for the arrowhead
+                path.Fill = brush;
             }
         }
         else if (element is TextBlock textBlock)
@@ -1838,29 +1700,26 @@ public partial class EditorWindow : Window
             textBlock.Foreground = brush;
         }
     }
-    
-    private bool IsColorChangeableElement(UIElement element)
+
+    private bool IsColorChangeableElement(Control element)
     {
-        // Pixelate rectangles render an ImageBrush of the underlying pixels; recolouring them
-        // makes no sense and would just paint a visible stroke. (Detect via tag — the fill is
-        // an ImageBrush, not a DrawingBrush, so a brush-type check doesn't identify them.)
         if (element is Rectangle { Tag: PixelateTag })
             return false;
 
         return element is Shape || element is TextBlock;
     }
 
-    private void Undo_Click(object sender, RoutedEventArgs e)
+    private void Undo_Click(object? sender, RoutedEventArgs e)
     {
         _undo.Undo(this);
     }
 
-    private void ResetNumbering_Click(object sender, RoutedEventArgs e)
+    private void ResetNumbering_Click(object? sender, RoutedEventArgs e)
     {
         _numberCounter = 1;
     }
 
-    private void ApplyCrop()
+    private async void ApplyCrop()
     {
         if (_cropRectangle == null) return;
 
@@ -1869,24 +1728,22 @@ public partial class EditorWindow : Window
         var cropWidth = _cropRectangle.Width;
         var cropHeight = _cropRectangle.Height;
 
-        // Validate and clamp crop dimensions
         cropX = Math.Max(0, cropX);
         cropY = Math.Max(0, cropY);
-        cropX = Math.Min(cropX, _originalImage.PixelWidth - 1);
-        cropY = Math.Min(cropY, _originalImage.PixelHeight - 1);
-        
-        cropWidth = Math.Min(cropWidth, _originalImage.PixelWidth - cropX);
-        cropHeight = Math.Min(cropHeight, _originalImage.PixelHeight - cropY);
-        
-        // Ensure positive dimensions
+        cropX = Math.Min(cropX, _originalImage.PixelSize.Width - 1);
+        cropY = Math.Min(cropY, _originalImage.PixelSize.Height - 1);
+
+        cropWidth = Math.Min(cropWidth, _originalImage.PixelSize.Width - cropX);
+        cropHeight = Math.Min(cropHeight, _originalImage.PixelSize.Height - cropY);
+
         var intCropX = (int)Math.Round(cropX);
         var intCropY = (int)Math.Round(cropY);
         var intCropWidth = (int)Math.Round(cropWidth);
         var intCropHeight = (int)Math.Round(cropHeight);
-        
+
         if (intCropWidth <= 0 || intCropHeight <= 0)
         {
-            MessageBox.Show("Invalid crop dimensions.", "Crop Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            await SimpleMessageBox.ShowAsync(this, "Invalid crop dimensions.", "Crop Error");
             DrawingCanvas.Children.Remove(_cropRectangle);
             _cropRectangle = null;
             return;
@@ -1895,8 +1752,8 @@ public partial class EditorWindow : Window
         try
         {
             var previousImage = _originalImage;
-            var previousElements = new List<UIElement>();
-            foreach (UIElement element in DrawingCanvas.Children)
+            var previousElements = new List<Control>();
+            foreach (Control element in DrawingCanvas.Children)
             {
                 if (element != _cropRectangle && element != _selectionBorder && !_resizeHandles.Contains(element))
                 {
@@ -1905,15 +1762,15 @@ public partial class EditorWindow : Window
             }
             var previousNumberCounter = _numberCounter;
 
-            // Create cropped bitmap
-            var croppedBitmap = new CroppedBitmap(_originalImage,
-                new Int32Rect(intCropX, intCropY, intCropWidth, intCropHeight));
+            // Crop via the same raw-pixel path as RegionSelector, rather than Avalonia's
+            // CroppedBitmap (which has no Save/pixel-access API of its own — see LINUX_PORT.md
+            // Phase 1 risk notes), so the cropped image is a real, independently usable Bitmap.
+            var captured = _originalImage.ToCapturedImage();
+            var croppedBitmap = CropCapturedImage(captured, intCropX, intCropY, intCropWidth, intCropHeight).ToAvaloniaBitmap();
 
-            // Update the image
             _originalImage = croppedBitmap;
             DisplayImage();
 
-            // Clear all annotations including crop rectangle
             DrawingCanvas.Children.Clear();
             _selectedElement = null;
             _selectionBorder = null;
@@ -1921,54 +1778,72 @@ public partial class EditorWindow : Window
             _cropRectangle = null;
             _numberCounter = 1;
 
-            // Reset to cursor tool
             SelectTool(AnnotationTool.Cursor);
             _undo.Push(new UndoController.CropUndoAction(previousImage, previousElements, previousNumberCounter));
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to apply crop: {ex.Message}", "Crop Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            await SimpleMessageBox.ShowAsync(this, $"Failed to apply crop: {ex.Message}", "Crop Error");
             DrawingCanvas.Children.Remove(_cropRectangle);
             _cropRectangle = null;
         }
     }
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private static MoneyShot.Abstractions.CapturedImage CropCapturedImage(MoneyShot.Abstractions.CapturedImage source, int x, int y, int width, int height)
+    {
+        const int bytesPerPixel = 4;
+        var destStride = width * bytesPerPixel;
+        var dest = new byte[destStride * height];
+        for (var row = 0; row < height; row++)
+        {
+            var srcOffset = (y + row) * source.Stride + x * bytesPerPixel;
+            Buffer.BlockCopy(source.PixelDataBgra32, srcOffset, dest, row * destStride, destStride);
+        }
+        return new MoneyShot.Abstractions.CapturedImage(width, height, destStride, dest);
+    }
+
+    private async void Save_Click(object? sender, RoutedEventArgs e)
     {
         try
         {
             var finalImage = CaptureCanvasAsImage();
 
-            // Honour the user's configured save folder and default format — previously the
-            // dialog always opened wherever Windows last left it, defaulting to PNG.
-            var settings = new SettingsService().LoadSettings();
+            var settings = new MoneyShot.Services.SettingsService().LoadSettings();
             var defaultFormat = settings.DefaultFileFormat.ToUpperInvariant();
-            var saveDialog = new Microsoft.Win32.SaveFileDialog
-            {
-                Filter = "PNG Image|*.png|JPEG Image|*.jpg|Bitmap Image|*.bmp",
-                FilterIndex = defaultFormat switch { "JPG" or "JPEG" => 2, "BMP" => 3, _ => 1 },
-                DefaultExt = defaultFormat switch { "JPG" or "JPEG" => ".jpg", "BMP" => ".bmp", _ => ".png" },
-                InitialDirectory = settings.DefaultSavePath,
-                FileName = _saveService.GenerateFileName(settings.DefaultFileFormat)
-            };
+            var extension = defaultFormat switch { "JPG" or "JPEG" => "jpg", "BMP" => "bmp", _ => "png" };
 
-            if (saveDialog.ShowDialog() == true)
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
-                var extension = System.IO.Path.GetExtension(saveDialog.FileName).TrimStart('.');
-                var format = GetFileFormat(extension);
-                _saveService.SaveToFile(finalImage, saveDialog.FileName, format);
-                MessageBox.Show("Image saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                Title = "Save screenshot",
+                SuggestedFileName = _saveService.GenerateFileName(settings.DefaultFileFormat),
+                DefaultExtension = extension,
+                SuggestedStartLocation = await StorageProvider.TryGetFolderFromPathAsync(new Uri(settings.DefaultSavePath)),
+                FileTypeChoices = new[]
+                {
+                    new FilePickerFileType("PNG Image") { Patterns = new[] { "*.png" } },
+                    new FilePickerFileType("JPEG Image") { Patterns = new[] { "*.jpg", "*.jpeg" } },
+                    new FilePickerFileType("Bitmap Image") { Patterns = new[] { "*.bmp" } },
+                }
+            });
+
+            var path = file?.TryGetLocalPath();
+            if (!string.IsNullOrEmpty(path))
+            {
+                var fileExtension = System.IO.Path.GetExtension(path).TrimStart('.');
+                var format = GetFileFormat(fileExtension);
+                _saveService.SaveToFile(finalImage, path, format);
+                await SimpleMessageBox.ShowAsync(this, "Image saved successfully!", "Success");
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to save image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            await SimpleMessageBox.ShowAsync(this, $"Failed to save image: {ex.Message}", "Error");
         }
     }
 
     private string GetFileFormat(string extension)
     {
-        return extension.ToUpper() switch
+        return extension.ToUpperInvariant() switch
         {
             "JPG" or "JPEG" => "JPG",
             "BMP" => "BMP",
@@ -1976,21 +1851,21 @@ public partial class EditorWindow : Window
         };
     }
 
-    private void SaveToClipboard_Click(object sender, RoutedEventArgs e)
+    private async void SaveToClipboard_Click(object? sender, RoutedEventArgs e)
     {
         try
         {
             var finalImage = CaptureCanvasAsImage();
             _saveService.SaveToClipboard(finalImage);
-            MessageBox.Show("Image copied to clipboard!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            await SimpleMessageBox.ShowAsync(this, "Image copied to clipboard!", "Success");
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to copy image to clipboard: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            await SimpleMessageBox.ShowAsync(this, $"Failed to copy image to clipboard: {ex.Message}", "Error");
         }
     }
 
-    private void ZoomIn_Click(object sender, RoutedEventArgs e)
+    private void ZoomIn_Click(object? sender, RoutedEventArgs e)
     {
         if (_zoomLevel < MaxZoom)
         {
@@ -1999,7 +1874,7 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void ZoomOut_Click(object sender, RoutedEventArgs e)
+    private void ZoomOut_Click(object? sender, RoutedEventArgs e)
     {
         if (_zoomLevel > MinZoom)
         {
@@ -2008,12 +1883,10 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void ZoomReset_Click(object sender, RoutedEventArgs e)
+    private void ZoomReset_Click(object? sender, RoutedEventArgs e)
     {
         _zoomLevel = 1.0;
         ApplyZoom();
-        // Also recenter the MMB-pan translation so this button is a reliable "get me back to a
-        // known-good view" affordance — otherwise a user who panned off-screen has no way back.
         PanTransform.X = 0;
         PanTransform.Y = 0;
     }
@@ -2028,50 +1901,42 @@ public partial class EditorWindow : Window
         }
     }
 
-    private BitmapSource CaptureCanvasAsImage() =>
+    private Bitmap CaptureCanvasAsImage() =>
         CanvasRenderer.CaptureCanvasAsImage(ImageCanvas, _originalImage, ZoomTransform, PanTransform);
-    
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+
+    private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.ClickCount == 2)
         {
-            // Double-click to maximize/restore
-            MaximizeRestore_Click(sender, e);
+            MaximizeRestore_Click(sender, new RoutedEventArgs());
         }
-        else if (e.ClickCount == 1)
+        else if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            try
-            {
-                DragMove();
-            }
-            catch (InvalidOperationException)
-            {
-                // DragMove can throw if window state is changing or mouse is not pressed
-                // Silently ignore these cases
-            }
+            BeginMoveDrag(e);
         }
     }
-    
-    private void Minimize_Click(object sender, RoutedEventArgs e)
+
+    private void Minimize_Click(object? sender, RoutedEventArgs e)
     {
         WindowState = WindowState.Minimized;
     }
-    
-    private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
+
+    private void MaximizeRestore_Click(object? sender, RoutedEventArgs e)
     {
+        var resources = Avalonia.Application.Current!.Resources;
         if (WindowState == WindowState.Maximized)
         {
             WindowState = WindowState.Normal;
-            MaximizeRestoreIcon.Data = (Geometry)FindResource("Icon.WindowMaximize");
+            MaximizeRestoreIcon.Data = (Geometry)resources["Icon.WindowMaximize"]!;
         }
         else
         {
             WindowState = WindowState.Maximized;
-            MaximizeRestoreIcon.Data = (Geometry)FindResource("Icon.WindowRestore");
+            MaximizeRestoreIcon.Data = (Geometry)resources["Icon.WindowRestore"]!;
         }
     }
 
-    private void Close_Click(object sender, RoutedEventArgs e)
+    private void Close_Click(object? sender, RoutedEventArgs e)
     {
         Close();
     }

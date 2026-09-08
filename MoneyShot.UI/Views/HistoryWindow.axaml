@@ -1,0 +1,100 @@
+<Window x:Class="MoneyShot.UI.Views.HistoryWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Money Shot — Capture History"
+        Height="640" Width="900"
+        MinHeight="480" MinWidth="720"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Cocoa.WindowBrush}"
+        Foreground="{StaticResource Cocoa.TextBrush}"
+        FontFamily="Segoe UI"
+        ExtendClientAreaToDecorationsHint="True"
+        WindowDecorations="None"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        CanResize="True">
+
+    <Window.Styles>
+        <Style Selector="Border.thumb-tile">
+            <Setter Property="BorderBrush" Value="{StaticResource Cocoa.BorderSubtleBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Background" Value="{StaticResource Cocoa.SurfaceBrush}"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="Padding" Value="8"/>
+        </Style>
+        <Style Selector="Border.thumb-tile:pointerover">
+            <Setter Property="BorderBrush" Value="{StaticResource Cocoa.AccentBrush}"/>
+            <Setter Property="Background" Value="{StaticResource Cocoa.SurfaceAltBrush}"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ░░ Title bar ░░ -->
+        <Border Grid.Row="0" Background="{StaticResource Cocoa.TitleBarBrush}"
+                BorderBrush="{StaticResource Cocoa.BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                PointerPressed="TitleBar_PointerPressed">
+            <Grid Height="32">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <TextBlock Text="Money Shot" FontSize="12.5" FontWeight="SemiBold"
+                               Foreground="{StaticResource Cocoa.TextBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Capture history" FontSize="12.5" Margin="8,0,0,0"
+                               Foreground="{StaticResource Cocoa.TextMutedBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Click="Minimize_Click" Theme="{StaticResource TitleBarButton}" Focusable="False">
+                        <Path Theme="{StaticResource CaptionIcon}" Data="{StaticResource Icon.WindowMinimize}"/>
+                    </Button>
+                    <Button Click="Close_Click" Theme="{StaticResource TitleBarCloseButton}" Focusable="False">
+                        <Path Theme="{StaticResource CaptionIcon}" Data="{StaticResource Icon.WindowClose}"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ░░ Header ░░ -->
+        <Border Grid.Row="1" Background="{StaticResource Cocoa.SurfaceBrush}"
+                BorderBrush="{StaticResource Cocoa.BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                Padding="18,12">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Capture history" FontSize="16" FontWeight="SemiBold"
+                           Foreground="{StaticResource Cocoa.TextBrush}"/>
+                <TextBlock Name="CountLabel" Foreground="{StaticResource Cocoa.TextSecondaryBrush}"
+                           FontSize="12.5" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ░░ Thumbnail grid ░░ -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="10">
+            <ItemsControl Name="HistoryList">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- ░░ Footer ░░ -->
+        <Border Grid.Row="3" Background="{StaticResource Cocoa.SurfaceBrush}"
+                BorderBrush="{StaticResource Cocoa.BorderSubtleBrush}" BorderThickness="0,1,0,0"
+                Padding="18,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Name="OpenFolderButton" Click="OpenFolder_Click"
+                        Theme="{StaticResource SubtleButton}" Padding="14,7" Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Folder}"/>
+                        <TextBlock Text="Open history folder" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button Content="Close" Click="Close_Click" Theme="{StaticResource AccentButton}" Padding="20,7"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

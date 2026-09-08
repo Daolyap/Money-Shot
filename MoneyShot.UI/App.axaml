@@ -1,0 +1,22 @@
+<Application x:Class="MoneyShot.UI.App"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             RequestedThemeVariant="Dark">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- CocoaTheme.axaml's root is ResourceDictionary (keyed brushes, icon geometries,
+                     and ControlTheme resources) — merged as a resource dictionary, WPF-style, not
+                     included as a Styles file. Theme="{StaticResource X}" on a control resolves
+                     against this resource tree. -->
+                <ResourceInclude Source="avares://MoneyShot.UI/Themes/CocoaTheme.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+    <Application.Styles>
+        <!-- FluentTheme supplies default control templates (Popup, ScrollViewer internals, etc.)
+             for anything CocoaTheme.axaml doesn't explicitly restyle. RequestedThemeVariant=Dark
+             above keeps Fluent's own defaults dark too, matching the cocoa palette. -->
+        <FluentTheme />
+    </Application.Styles>
+</Application>

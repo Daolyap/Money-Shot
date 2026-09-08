@@ -1,0 +1,319 @@
+<Window x:Class="MoneyShot.UI.Views.EditorWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Money Shot — Editor" Height="900" Width="1500"
+        MinHeight="640" MinWidth="1000"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Cocoa.WindowBrush}"
+        Foreground="{StaticResource Cocoa.TextBrush}"
+        FontFamily="Segoe UI"
+        ExtendClientAreaToDecorationsHint="True"
+        WindowDecorations="None"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        CanResize="True">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ░░ Title bar ░░ -->
+        <Border Grid.Row="0" Background="{StaticResource Cocoa.TitleBarBrush}"
+                BorderBrush="{StaticResource Cocoa.BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                PointerPressed="TitleBar_PointerPressed">
+            <Grid Height="32">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <TextBlock Text="Money Shot" FontSize="12.5" FontWeight="SemiBold"
+                               Foreground="{StaticResource Cocoa.TextBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Editor" FontSize="12.5" Margin="8,0,0,0"
+                               Foreground="{StaticResource Cocoa.TextMutedBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Click="Minimize_Click" Theme="{StaticResource TitleBarButton}" Focusable="False">
+                        <Path Theme="{StaticResource CaptionIcon}" Data="{StaticResource Icon.WindowMinimize}"/>
+                    </Button>
+                    <Button Name="MaximizeRestoreButton" Click="MaximizeRestore_Click"
+                            Theme="{StaticResource TitleBarButton}" Focusable="False">
+                        <Path Name="MaximizeRestoreIcon" Theme="{StaticResource CaptionIcon}"
+                              Data="{StaticResource Icon.WindowMaximize}"/>
+                    </Button>
+                    <Button Click="Close_Click" Theme="{StaticResource TitleBarCloseButton}" Focusable="False">
+                        <Path Theme="{StaticResource CaptionIcon}" Data="{StaticResource Icon.WindowClose}"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ░░ Toolbar ░░ -->
+        <Border Grid.Row="1" Padding="10,8" Background="{StaticResource Cocoa.SurfaceBrush}"
+                BorderBrush="{StaticResource Cocoa.BorderSubtleBrush}" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <!-- Row 1: tools + appearance -->
+                <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <WrapPanel Name="ToolButtonsPanel" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Tag="Cursor" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Select and move elements (Esc deselects)">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIconFilled}" Data="{StaticResource Icon.Cursor}"/>
+                                <TextBlock Text="Select" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Crop" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Crop the image">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Crop}"/>
+                                <TextBlock Text="Crop" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Rectangle" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Rectangle (R)">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Rectangle}"/>
+                                <TextBlock Text="Rectangle" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Circle" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Ellipse (C)">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Ellipse}"/>
+                                <TextBlock Text="Ellipse" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Arrow" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Arrow (A)">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Arrow}"/>
+                                <TextBlock Text="Arrow" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Line" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Line (L)">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Line}"/>
+                                <TextBlock Text="Line" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Freehand" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Freehand drawing (F)">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Freehand}"/>
+                                <TextBlock Text="Draw" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Number" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Numbered label (1) — click to place 1, 2, 3…">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Number}"/>
+                                <TextBlock Text="Number" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Text" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Text label (T)">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Text}"/>
+                                <TextBlock Text="Text" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Blur" Click="ToolButton_Click" Theme="{StaticResource ToolButton}"
+                                ToolTip.Tip="Pixelate (P) — obscure sensitive information">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIconFilled}" Data="{StaticResource Icon.Pixelate}"/>
+                                <TextBlock Text="Pixelate" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </WrapPanel>
+
+                    <Rectangle Theme="{StaticResource ToolbarDivider}"/>
+
+                    <!-- Colour palette -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Background="#E5484D" Click="ColorButton_Click" Theme="{StaticResource ColorSwatch}" ToolTip.Tip="Red"/>
+                        <Button Background="#3B82F6" Click="ColorButton_Click" Theme="{StaticResource ColorSwatch}" ToolTip.Tip="Blue"/>
+                        <Button Background="#30A46C" Click="ColorButton_Click" Theme="{StaticResource ColorSwatch}" ToolTip.Tip="Green"/>
+                        <Button Background="#F5D90A" Click="ColorButton_Click" Theme="{StaticResource ColorSwatch}" ToolTip.Tip="Yellow"/>
+                        <Button Background="#F76B15" Click="ColorButton_Click" Theme="{StaticResource ColorSwatch}" ToolTip.Tip="Orange"/>
+                        <Button Background="#8E4EC6" Click="ColorButton_Click" Theme="{StaticResource ColorSwatch}" ToolTip.Tip="Purple"/>
+                        <Button Background="#1A1A1A" Click="ColorButton_Click" Theme="{StaticResource ColorSwatch}" ToolTip.Tip="Black"/>
+                        <Button Background="#FFFFFF" Click="ColorButton_Click" Theme="{StaticResource ColorSwatch}" ToolTip.Tip="White"/>
+                        <Button Name="CustomColorButton" Click="CustomColorButton_Click"
+                                Theme="{StaticResource ColorSwatch}" Background="{StaticResource Cocoa.SurfaceAltBrush}"
+                                ToolTip.Tip="Pick a custom colour…">
+                            <TextBlock Text="+" Foreground="{StaticResource Cocoa.TextBrush}" FontSize="14"
+                                       FontWeight="Bold" Margin="0,-2,0,0"/>
+                        </Button>
+                    </StackPanel>
+
+                    <Rectangle Theme="{StaticResource ToolbarDivider}"/>
+
+                    <!-- Stroke thickness -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Stroke" Foreground="{StaticResource Cocoa.TextSecondaryBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12"/>
+                        <Slider Name="StrokeThicknessSlider"
+                                Width="90" Minimum="1" Maximum="10" Value="3"
+                                TickFrequency="1" IsSnapToTickEnabled="True"
+                                VerticalAlignment="Center"
+                                ValueChanged="StrokeThicknessSlider_ValueChanged"/>
+                        <TextBlock Name="StrokeThicknessLabel" Text="3"
+                                   Foreground="{StaticResource Cocoa.TextBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" MinWidth="14"/>
+                    </StackPanel>
+
+                    <Rectangle Theme="{StaticResource ToolbarDivider}"/>
+
+                    <!-- Text background -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Text fill" Foreground="{StaticResource Cocoa.TextSecondaryBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12"/>
+                        <ComboBox Name="TextBackgroundComboBox"
+                                  Width="116" Height="30"
+                                  SelectionChanged="TextBackgroundComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Transparent" IsSelected="True"/>
+                            <ComboBoxItem Content="White"/>
+                            <ComboBoxItem Content="Black"/>
+                            <ComboBoxItem Content="Yellow"/>
+                            <ComboBoxItem Content="Red"/>
+                            <ComboBoxItem Content="Blue"/>
+                            <ComboBoxItem Content="Green"/>
+                        </ComboBox>
+                    </StackPanel>
+                </WrapPanel>
+
+                <!-- Row 2: actions -->
+                <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
+                    <Button Click="Undo_Click" Theme="{StaticResource ToolButton}" ToolTip.Tip="Undo (Ctrl+Z)">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Undo}"/>
+                            <TextBlock Text="Undo" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Click="ResetNumbering_Click" Theme="{StaticResource ToolButton}"
+                            ToolTip.Tip="Restart number labels at 1">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Refresh}"/>
+                            <TextBlock Text="Reset numbering" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Rectangle Theme="{StaticResource ToolbarDivider}"/>
+
+                    <Button Click="ZoomOut_Click" Theme="{StaticResource ToolButton}" ToolTip.Tip="Zoom out (Ctrl+- or Ctrl+Scroll)">
+                        <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.ZoomOut}"/>
+                    </Button>
+                    <TextBlock Name="ZoomLevelLabel" Text="100%" MinWidth="42" TextAlignment="Center"
+                               Foreground="{StaticResource Cocoa.TextSecondaryBrush}" FontSize="12"
+                               VerticalAlignment="Center" ToolTip.Tip="Current zoom level"/>
+                    <Button Click="ZoomIn_Click" Theme="{StaticResource ToolButton}" ToolTip.Tip="Zoom in (Ctrl++ or Ctrl+Scroll)">
+                        <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.ZoomIn}"/>
+                    </Button>
+                    <Button Click="ZoomReset_Click" Theme="{StaticResource ToolButton}" ToolTip.Tip="Reset zoom and pan (Ctrl+0)">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.ZoomReset}"/>
+                            <TextBlock Text="Fit" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Rectangle Theme="{StaticResource ToolbarDivider}"/>
+
+                    <Button Click="Save_Click" Theme="{StaticResource AccentButton}" ToolTip.Tip="Save to file (Ctrl+S)">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Save}"
+                                  Stroke="{StaticResource Cocoa.OnAccentBrush}"/>
+                            <TextBlock Text="Save" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Click="SaveToClipboard_Click" Theme="{StaticResource AccentButton}" Margin="6,0,0,0"
+                            ToolTip.Tip="Copy to clipboard (Ctrl+C)">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Copy}"
+                                  Stroke="{StaticResource Cocoa.OnAccentBrush}"/>
+                            <TextBlock Text="Copy" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Rectangle Theme="{StaticResource ToolbarDivider}"/>
+
+                    <Button Click="ShortcutsHelp_Click" Theme="{StaticResource ToolButton}"
+                            ToolTip.Tip="Keyboard shortcuts (?)">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Help}"/>
+                            <TextBlock Text="Shortcuts" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ░░ Keyboard shortcut overlay ░░ -->
+        <Border Name="ShortcutsOverlay" Grid.Row="2" IsVisible="False"
+                Background="#D8191209" ZIndex="100"
+                PointerPressed="ShortcutsOverlay_PointerPressed">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{StaticResource Cocoa.SurfaceBrush}"
+                    BorderBrush="{StaticResource Cocoa.BorderBrush}" BorderThickness="1"
+                    CornerRadius="10" Padding="28" MaxWidth="680">
+                <StackPanel>
+                    <TextBlock Text="Keyboard shortcuts" Foreground="{StaticResource Cocoa.TextBrush}"
+                               FontSize="19" FontWeight="SemiBold" Margin="0,0,0,18"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                            <TextBlock Text="TOOLS" Foreground="{StaticResource Cocoa.AccentBrush}"
+                                       FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <TextBlock Text="R — Rectangle"     Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="C — Ellipse"       Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="A — Arrow"         Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="L — Line"          Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="F — Freehand"      Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="T — Text"          Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="P — Pixelate"      Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="1 — Number label"  Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="18,0,0,0">
+                            <TextBlock Text="EDITOR" Foreground="{StaticResource Cocoa.AccentBrush}"
+                                       FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <TextBlock Text="Ctrl+Z — Undo"               Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="Ctrl+C — Copy to clipboard"  Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="Ctrl+S — Save"               Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="Ctrl+Scroll — Zoom"          Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="Ctrl+0 — Reset zoom"         Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="Middle mouse — Pan the view" Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="Delete — Remove selected"    Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                            <TextBlock Text="Esc — Close editor"          Foreground="{StaticResource Cocoa.TextSecondaryBrush}" Margin="0,2.5"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="Click anywhere or press any key to dismiss"
+                               Foreground="{StaticResource Cocoa.TextMutedBrush}" FontStyle="Italic"
+                               HorizontalAlignment="Center" Margin="0,18,0,0" FontSize="11.5"/>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- ░░ Canvas ░░ -->
+        <ScrollViewer Grid.Row="2" Name="EditorScrollViewer"
+                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                      Background="{StaticResource Cocoa.CanvasBrush}">
+            <Grid Name="ImageCanvas" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  UseLayoutRounding="True">
+                <!-- RenderTransform (ZoomTransform/PanTransform) is assigned in code-behind rather
+                     than here: x:Name on objects nested this deep inside a property-element
+                     (Grid.RenderTransform > TransformGroup > ScaleTransform) doesn't reliably get
+                     a compiler-generated field for non-Control objects — assigning explicitly in
+                     the constructor sidesteps that rather than depending on it. -->
+                <!-- HighQuality scaling avoids the shimmer/moiré artifacts the default sampler
+                     produces when the screenshot is shown below 100% zoom. -->
+                <Image Name="ImageDisplay" RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                <Canvas Name="DrawingCanvas"
+                        PointerPressed="Canvas_PointerPressed"
+                        PointerMoved="Canvas_PointerMoved"
+                        PointerReleased="Canvas_PointerReleased"
+                        Background="Transparent"/>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Window>
