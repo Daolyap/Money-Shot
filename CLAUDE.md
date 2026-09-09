@@ -33,30 +33,48 @@ All visual styling lives in `MoneyShot/Themes/CocoaTheme.xaml` (merged in `App.x
 - Code-behind looks styles up with `FindResource` (App-scoped), not `Resources[...]` (window-scoped).
 - The pixelate tool (`CanvasRenderer.CreatePixelatedBrush`) copies only the covered region's pixels once and block-averages in that buffer. Don't go back to rendering the full image into a `RenderTargetBitmap` — at 4K that allocated ~33 MB per pixelation plus a `CroppedBitmap` per block.
 
-### Project split: MoneyShot.Core / MoneyShot.Platform.Windows / MoneyShot / MoneyShot.UI (Linux-port groundwork)
+### Project split: MoneyShot.Core / MoneyShot.Platform.Windows / MoneyShot.Platform.Linux / MoneyShot / MoneyShot.UI
 
-The solution has five projects — see `LINUX_PORT.md` for the full rationale and the remaining
-migration phases. **`MoneyShot` (WPF) is still the shipping app** — the MSI installer and CI
-release pipeline both build it, unchanged. `MoneyShot.UI` (Avalonia) is additive: it exists to
-prove out the Linux-port UI migration and is not wired into any release process. Don't touch the
-WPF project's behavior when working on `MoneyShot.UI`, and don't assume `MoneyShot.UI` is
-production-ready — see `LINUX_PORT.md` Phase 1 for exactly what has and hasn't been verified
-there (short version: it builds and `MainWindow` has been visually confirmed working;
-`EditorWindow`, `SettingsWindow`, `HistoryWindow`, `RegionSelector`, hotkeys, and the tray menu
-have not been interactively tested).
+The solution has six projects — see `LINUX_PORT.md` for the full rationale, what's verified, and
+the remaining gaps (Wayland, mainly). **`MoneyShot` (WPF) is still the shipping app** — the MSI
+installer and CI release pipeline both build it, unchanged; it is Windows-only and always will be
+(WPF has no Linux runtime). `MoneyShot.UI` (Avalonia) is the cross-platform UI: it multi-targets
+`net10.0-windows` and `net10.0`, builds and runs on both Windows and Linux (X11 sessions — see
+`LINUX_PORT.md`'s Wayland-status section), and is packaged for Linux as `.deb`/`.rpm`/AppImage via
+`Packaging/linux/` and `.github/workflows/build-linux.yml`. It is **not** wired into the Windows
+MSI/release pipeline (that stays on the WPF app) — don't touch WPF's behavior when working on
+`MoneyShot.UI`. Before relying on `MoneyShot.UI` for anything beyond what `LINUX_PORT.md` documents
+as verified, read its Phase 1/2/3 status sections — most core flows (capture, editor, history,
+settings, tray, packaging) are genuinely verified against real Windows and Linux runs; some
+(`EditorWindow`'s deeper tools, multi-monitor/HiDPI on Linux, Wayland entirely) are not.
 
 - **`MoneyShot.Core`** (`net10.0`, no UI/Windows dependency) — Models, `SettingsService`, `Logger`,
-  `AutoUpdateService`, `HotKeyParser`, and the platform abstraction interfaces under
-  `MoneyShot.Abstractions` (`IScreenCapture`, `IGlobalHotkeys`, `ITrayIcon`, `IAutoStart`,
-  `IClipboard`). `CapturedImage` (raw BGRA32 pixels) is the neutral bitmap type Core hands back
-  instead of a WPF `BitmapSource`.
+  `AutoUpdateService`, `HotKeyParser`, `AppDataPaths` (resolves the per-user config root —
+  `Environment.SpecialFolder.ApplicationData` alone is not reliable on Linux, see `LINUX_PORT.md`
+  § 8), and the platform abstraction interfaces under `MoneyShot.Abstractions` (`IScreenCapture`,
+  `IGlobalHotkeys`, `ITrayIcon`, `IAutoStart`, `IClipboard`). `CapturedImage` (raw BGRA32 pixels) is
+  the neutral bitmap type Core hands back instead of a WPF `BitmapSource`/Avalonia `Bitmap`.
 - **`MoneyShot.Platform.Windows`** (`net10.0-windows`, no WPF dependency) — `Win32ScreenCapture`,
-  `Win32GlobalHotkeys`, `Win32TrayIcon`, `Win32AutoStart`, `Win32Clipboard`. Deliberately
-  UI-framework-agnostic (references WinForms only for `NotifyIcon`/`Clipboard`, not WPF) so the
-  same implementations keep working if the UI layer ever moves to Avalonia.
-- **`MoneyShot`** (WPF) — every XAML window, plus `SaveService`/`HistoryService` (still
-  `BitmapSource`-based — these get an Avalonia twin only if/when Phase 1 of the port happens).
-  `Interop/BitmapConversions.cs` converts `CapturedImage` ↔ `BitmapSource` at the UI boundary.
+  `Win32GlobalHotkeys`, `Win32TrayIcon`, `Win32AutoStart`, `Win32Clipboard`, `MemoryTrimmer`.
+  Deliberately UI-framework-agnostic (references WinForms only for `NotifyIcon`/`Clipboard`, not
+  WPF) so the same implementations work under both `MoneyShot` (WPF) and `MoneyShot.UI` (Avalonia).
+- **`MoneyShot.Platform.Linux`** (`net10.0`, no Avalonia dependency) — `LinuxScreenCapture` (X11
+  `XGetImage` + `xrandr`-parsed monitor bounds), `LinuxGlobalHotkeys` (X11 `XGrabKey`),
+  `LinuxAutoStart` (XDG `~/.config/autostart/*.desktop`), `LinuxClipboard` (SkiaSharp PNG-encode +
+  `wl-copy`/`xclip`), `LinuxMemoryTrimmer`. X11-only — no Wayland-native capture/hotkeys yet (see
+  `LINUX_PORT.md`'s Wayland-status section).
+- **`MoneyShot`** (WPF, Windows-only) — every XAML window, plus `SaveService`/`HistoryService`
+  (`BitmapSource`-based). `Interop/BitmapConversions.cs` converts `CapturedImage` ↔ `BitmapSource`
+  at the UI boundary.
+- **`MoneyShot.UI`** (Avalonia, cross-platform) — every window ported to `.axaml`, plus its own
+  `SaveService`/`HistoryService` (Avalonia `Bitmap`-based, SkiaSharp for JPEG/BMP encoding since
+  Avalonia's own `Bitmap.Save` is PNG-only). `Platform/PlatformServices.cs` is a **compile-time**
+  `#if WINDOWS`-gated factory (not a runtime `OperatingSystem.IsWindows()` check — the two TFMs
+  don't reference the same platform project) that every window calls instead of `new Win32*(...)`;
+  `Platform/LinuxTrayIcon.cs` wraps Avalonia's own cross-platform `TrayIcon`/`NativeMenu` rather
+  than hand-rolling the Linux StatusNotifierItem D-Bus protocol. `Views/SimpleColorDialog.cs` is a
+  small hand-rolled Avalonia color picker used only on the non-Windows build (WinForms'
+  `ColorDialog`, used on Windows, isn't available there).
 
 ### Two windows + service layer (no DI, no MVVM framework)
 

@@ -12,10 +12,7 @@ public class SettingsService
 
     public SettingsService()
     {
-        _appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MoneyShot"
-        );
+        _appDataPath = Path.Combine(AppDataPaths.GetConfigRoot(), "MoneyShot");
         Directory.CreateDirectory(_appDataPath);
         _settingsPath = Path.Combine(_appDataPath, SettingsFileName);
     }

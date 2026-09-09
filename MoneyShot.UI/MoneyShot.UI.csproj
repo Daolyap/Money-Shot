@@ -2,20 +2,16 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <!-- net10.0-windows, not bare net10.0: a plain net10.0 project cannot reference a
-         net10.0-windows one at all (TFM compatibility requires the consumer to be equal-or-more
-         -specific, not the other way around — EnableWindowsTargeting only relaxes restore on a
-         non-Windows *build agent*, it doesn't let a cross-platform TFM depend on a Windows-only
-         one). This is also just honest: Phase 1 is explicitly a Windows-only Avalonia build (see
-         LINUX_PORT.md) since MoneyShot.Platform.Linux doesn't exist yet — this project becomes
-         genuinely cross-platform (TargetFrameworks net10.0;net10.0-windows, or a runtime OS check
-         instead of a compile-time project reference) only once Phase 2 adds that project. -->
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- net10.0-windows for the Windows build (Win32 platform integration via
+         MoneyShot.Platform.Windows), plain net10.0 for everything else (Linux, via
+         MoneyShot.Platform.Linux — see LINUX_PORT.md Phase 2). A TFM-conditional ProjectReference
+         below picks the right platform project per target; PlatformServices.cs (Platform/) picks
+         the right implementation type per target via the WINDOWS compile constant set below.
+         `dotnet build`/`publish` without an explicit -f builds both TFMs; CI picks one per OS via
+         `-f net10.0-windows -r win-x64` / `-f net10.0 -r linux-x64`. -->
+    <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Version>2.1.0</Version>
     <AssemblyVersion>2.1.0.0</AssemblyVersion>
@@ -23,16 +19,25 @@
     <Company>Daolyap &amp; iSaluki</Company>
     <Authors>Daolyap &amp; iSaluki</Authors>
     <Product>Money Shot Screenshot Tool</Product>
-    <Description>A modern, feature-rich screenshot tool with comprehensive annotation capabilities (Avalonia UI — see LINUX_PORT.md Phase 1).</Description>
+    <Description>A modern, feature-rich screenshot tool with comprehensive annotation capabilities (Avalonia UI — see LINUX_PORT.md).</Description>
     <Copyright>Copyright © 2026 Daolyap &amp; iSaluki</Copyright>
   </PropertyGroup>
 
+  <PropertyGroup Condition="$(TargetFramework.Contains('windows'))">
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Read by PlatformServices.cs (and nowhere else) to pick Win32*/Linux* implementation types
+         at compile time — deliberately not a runtime OperatingSystem.IsWindows() check, since the
+         net10.0 (non-Windows) TFM doesn't even reference MoneyShot.Platform.Windows and couldn't
+         resolve the Win32* types either way. -->
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
   <!--
-    Avalonia itself is cross-platform. On Windows, platform integration (screen capture, hotkeys,
-    tray, clipboard, autostart) comes from MoneyShot.Platform.Windows via the same
-    MoneyShot.Abstractions interfaces MoneyShot (WPF) uses — see LINUX_PORT.md Phase 0/1. This
-    project is additive: it does not replace or modify the shipping WPF app/installer, it exists
-    to prove out (or disprove) the Avalonia UI port.
+    Avalonia itself is cross-platform. Platform integration (screen capture, hotkeys, tray,
+    clipboard, autostart) comes from MoneyShot.Platform.Windows or MoneyShot.Platform.Linux via the
+    same MoneyShot.Abstractions interfaces MoneyShot (WPF) uses — see LINUX_PORT.md Phase 0-2.
   -->
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.2" />
@@ -47,23 +52,50 @@
     <PackageReference Include="SkiaSharp" Version="4.151.2" />
   </ItemGroup>
 
+  <!-- Avalonia.Skia 12.1.2 pulls SkiaSharp.NativeAssets.Linux in transitively at 3.119.4 — a much
+       older native library than the managed "SkiaSharp" 4.151.2 package above expects (confirmed
+       by actually publishing+running a self-contained linux-x64 build: it throws
+       "the version of the native libSkiaSharp library (119.0) is incompatible ... [151.0, 152.0)"
+       out of SKImageInfo's static constructor before the app even gets to show a window). Windows
+       doesn't hit this — Avalonia.Skia's Win32/macOS native asset transitive versions already
+       happen to land on 4.151.2 (see MoneyShot.UI.deps.json), only the Linux one doesn't. Pinning
+       it explicitly forces NuGet to resolve the matching version instead of the low transitive
+       floor. -->
+  <ItemGroup Condition="!$(TargetFramework.Contains('windows'))">
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.2" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\MoneyShot.Core\MoneyShot.Core.csproj" />
   </ItemGroup>
 
-  <!-- WinForms' ColorDialog is reused as-is for the custom-color picker (EditorWindow) rather
-       than building a new Avalonia color picker from scratch — matches CLAUDE.md's "reuse the OS
-       picker" reasoning from the WPF build. Fine for now since this build is Windows-only until
-       Phase 2; a cross-platform color picker becomes necessary only once Linux is targeted. -->
+  <!-- avares://MoneyShot.UI/Assets/icon.png — the window/tray icon on both platforms (see
+       Platform/LinuxTrayIcon.cs and Views/MainWindow.axaml's Icon= attribute). -->
   <ItemGroup>
+    <AvaloniaResource Include="Assets\icon.png" />
+  </ItemGroup>
+
+  <!-- WinForms' ColorDialog is reused as-is for the custom-color picker (EditorWindow) on Windows
+       — matches CLAUDE.md's "reuse the OS picker" reasoning from the WPF build. Not available
+       outside net10.0-windows, so the net10.0 (Linux) build uses Views/SimpleColorDialog.axaml
+       instead — see the #if WINDOWS / #else split in EditorWindow.axaml.cs's color-picker handler. -->
+  <ItemGroup Condition="$(TargetFramework.Contains('windows'))">
     <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
   </ItemGroup>
 
-  <!-- Platform integration is wired per-OS at startup (App.axaml.cs); Windows is the only
-       implementation that exists today (MoneyShot.Platform.Windows), referenced unconditionally
-       for now since this build only targets Windows until Phase 2 adds MoneyShot.Platform.Linux. -->
-  <ItemGroup>
+  <ItemGroup Condition="$(TargetFramework.Contains('windows'))">
     <ProjectReference Include="..\MoneyShot.Platform.Windows\MoneyShot.Platform.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!$(TargetFramework.Contains('windows'))">
+    <ProjectReference Include="..\MoneyShot.Platform.Linux\MoneyShot.Platform.Linux.csproj" />
+  </ItemGroup>
+
+  <!-- app.manifest (PerMonitorV2 DPI awareness) is Windows-only content; excluding it from the
+       net10.0 compile items avoids MSBuild warning about an unused/unrecognized item on that TFM
+       (ApplicationManifest itself is already gated above, this covers the raw file inclusion). -->
+  <ItemGroup Condition="!$(TargetFramework.Contains('windows'))">
+    <None Remove="app.manifest" />
   </ItemGroup>
 
 </Project>

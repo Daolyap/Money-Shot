@@ -7,8 +7,8 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using MoneyShot.Abstractions;
 using MoneyShot.Models;
-using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
+using MoneyShot.UI.Platform;
 using MoneyShot.UI.Services;
 
 namespace MoneyShot.UI.Views;
@@ -29,8 +29,8 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         _settingsService = new SettingsService();
-        _screenCapture = new Win32ScreenCapture();
-        _autoStart = new Win32AutoStart();
+        _screenCapture = PlatformServices.CreateScreenCapture();
+        _autoStart = PlatformServices.CreateAutoStart();
         _settings = _settingsService.LoadSettings();
         LoadSettings();
         LoadMonitorHotkeysInfo();
@@ -166,7 +166,14 @@ public partial class SettingsWindow : Window
                 await SimpleMessageBox.ShowAsync(this, $"Warning: {ex.Message}\nOther settings were saved successfully.", "Partial Success");
             }
 
-            var printScreenApplied = _autoStart.SetPrintScreenSuppressed(_settings.DisableWindowsPrintScreen);
+            // SetPrintScreenSuppressed always returns false on platforms with no concept of "the
+            // OS's own screenshot shortcut" to suppress (see IAutoStart's doc comment — Linux has
+            // no analogue of Windows' Snipping Tool PrintScreen registry association). Only treat
+            // that false as a real, worth-surfacing failure when the user actually asked for the
+            // suppression (the checkbox is checked) — otherwise every settings save on Linux would
+            // show a "Partial Success" dialog about a Windows-only feature nobody enabled.
+            var printScreenApplied = !_settings.DisableWindowsPrintScreen
+                || _autoStart.SetPrintScreenSuppressed(_settings.DisableWindowsPrintScreen);
 
             if (Owner is MainWindow mainWindow)
             {
@@ -175,7 +182,7 @@ public partial class SettingsWindow : Window
 
             var successMessage = printScreenApplied
                 ? "Settings saved successfully! Hotkeys have been updated."
-                : "Settings saved, but Windows Print Screen integration could not be fully updated. You may need to reopen the app as admin or update the Print Screen snipping setting in Windows keyboard settings.";
+                : "Settings saved, but the Print Screen system-shortcut integration could not be fully updated (on Windows: you may need to reopen the app as admin, or update the Print Screen snipping setting in Windows keyboard settings).";
 
             await SimpleMessageBox.ShowAsync(this, successMessage, printScreenApplied ? "Success" : "Partial Success");
             Close();

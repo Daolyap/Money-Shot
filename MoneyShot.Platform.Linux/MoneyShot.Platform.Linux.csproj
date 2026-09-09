@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Plain net10.0, not net10.0-windows/-linux: this project is consumed by MoneyShot.UI's
+         net10.0 TargetFramework (see LINUX_PORT.md Phase 2), which is the "everything that isn't
+         Windows" build. Nothing here is expected to run correctly on macOS — only Linux (X11
+         sessions; see LinuxGlobalHotkeys/LinuxScreenCapture for the Wayland caveats) is a
+         supported target, but there's no net10.0-linux TFM in .NET, so this is gated at runtime
+         via OperatingSystem.IsLinux() checks where it matters, not at the TFM level. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- LinuxClipboard pins CapturedImage's byte[] directly into an SKBitmap rather than copying,
+         to avoid an extra full-frame allocation on every clipboard copy. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MoneyShot.Core\MoneyShot.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Needed only to PNG-encode CapturedImage for LinuxClipboard (wl-copy/xclip need real
+         image/png bytes, unlike Windows' DIB-based clipboard format). Already a dependency of
+         MoneyShot.UI for the same reason (Avalonia's own Bitmap.Save is PNG-only anyway), so this
+         doesn't introduce a new library to the overall build, just an explicit reference here too. -->
+    <PackageReference Include="SkiaSharp" Version="4.151.2" />
+    <!-- See MoneyShot.UI.csproj's matching comment — without this explicit pin, Avalonia.Skia's
+         transitive dependency on SkiaSharp.NativeAssets.Linux resolves to a much older (3.119.4)
+         native library that's API-incompatible with managed SkiaSharp 4.151.2, confirmed by
+         actually running a published build and hitting the resulting TypeInitializationException. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.2" />
+  </ItemGroup>
+
+</Project>

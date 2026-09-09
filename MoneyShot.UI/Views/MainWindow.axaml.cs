@@ -7,8 +7,8 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using MoneyShot.Abstractions;
 using MoneyShot.UI.Interop;
+using MoneyShot.UI.Platform;
 using MoneyShot.UI.Services;
-using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
 using Path = Avalonia.Controls.Shapes.Path;
 
@@ -35,10 +35,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _screenshotService = new Win32ScreenCapture();
-        _saveService = new SaveService(new Win32Clipboard());
+        _screenshotService = PlatformServices.CreateScreenCapture();
+        _saveService = new SaveService(PlatformServices.CreateClipboard());
         _settingsService = new SettingsService();
-        _hotKeyService = new Win32GlobalHotkeys();
+        _hotKeyService = PlatformServices.CreateGlobalHotkeys();
         _autoUpdateService = new AutoUpdateService();
         _historyService = new HistoryService();
 
@@ -252,7 +252,7 @@ public partial class MainWindow : Window
         menuItems.Add(new TrayMenuItem("Show Window", ShowMainWindow));
         menuItems.Add(new TrayMenuItem("Exit", ExitApplication));
 
-        _trayIcon = new Win32TrayIcon();
+        _trayIcon = PlatformServices.CreateTrayIcon();
         _trayIcon.Show("Money Shot - Screenshot Tool", menuItems);
         _trayIcon.DoubleClicked += ShowMainWindow;
     }
@@ -296,8 +296,8 @@ public partial class MainWindow : Window
             }
 
             var regionSelector = new RegionSelector(frozenScreen);
-            var confirmed = await regionSelector.ShowDialog<bool>(this);
-            if (confirmed && regionSelector.CroppedScreenshot != null)
+            await regionSelector.ShowAsDialogAsync(this);
+            if (regionSelector.CroppedScreenshot != null)
             {
                 await OpenEditorAsync(regionSelector.CroppedScreenshot, "Region");
             }
@@ -344,7 +344,7 @@ public partial class MainWindow : Window
             }
 
             var editor = new EditorWindow(screenshot);
-            await editor.ShowDialog(this);
+            await editor.ShowAsDialogAsync(this);
         }
         catch (System.Exception ex)
         {
@@ -354,14 +354,20 @@ public partial class MainWindow : Window
         }
         finally
         {
-            MemoryTrimmer.TrimAfterEditorClose();
+#if WINDOWS
+            MoneyShot.Platform.Windows.MemoryTrimmer.TrimAfterEditorClose();
+#else
+            MoneyShot.Platform.Linux.LinuxMemoryTrimmer.TrimAfterEditorClose();
+#endif
         }
     }
 
     private async Task ShowSettingsAsync()
     {
         var settings = new SettingsWindow();
-        await settings.ShowDialog(this);
+        // Reachable from the tray menu while MainWindow is hidden (StartInTray) — must not use a
+        // raw ShowDialog(this), see MoneyShot.UI.Interop.WindowExtensions.
+        await settings.ShowAsDialogAsync(this);
     }
 
     private void ShowHistory()

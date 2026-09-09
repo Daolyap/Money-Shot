@@ -2,6 +2,7 @@
         xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Money Shot" Height="600" Width="720"
+        Icon="avares://MoneyShot.UI/Assets/icon.png"
         MinHeight="500" MinWidth="600"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource Cocoa.WindowBrush}"

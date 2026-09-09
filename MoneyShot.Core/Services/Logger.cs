@@ -59,10 +59,7 @@ public static class Logger
 
     private static string InitialiseLogDirectory()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MoneyShot",
-            "logs");
+        var dir = Path.Combine(AppDataPaths.GetConfigRoot(), "MoneyShot", "logs");
         try
         {
             Directory.CreateDirectory(dir);

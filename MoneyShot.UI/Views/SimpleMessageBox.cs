@@ -5,6 +5,13 @@ using Avalonia.Media;
 
 namespace MoneyShot.UI.Views;
 
+// See MoneyShot.UI.Interop.WindowExtensions for why this never uses ShowDialog(owner): the owner
+// passed in here is very often the (deliberately hidden, tray-app) MainWindow — Avalonia throws
+// "Cannot show window with non-visible owner" in that case, confirmed by actually running the
+// capture flow. A message box doesn't need strict modality against its owner, so it just always
+// uses Show() + Topmost, sidestepping the constraint entirely rather than needing the
+// visible/hidden fallback dance ShowAsDialogAsync does for windows that DO want real modality.
+
 public enum SimpleMessageBoxButtons
 {
     Ok,
@@ -37,7 +44,10 @@ public static class SimpleMessageBox
             Width = 400,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            // CenterOwner would need a visible owner too (same underlying Avalonia constraint) —
+            // center on the screen instead, which works regardless of the owner's visibility.
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Topmost = true,
             Background = (IBrush?)Avalonia.Application.Current!.Resources["Cocoa.WindowBrush"],
             Foreground = (IBrush?)Avalonia.Application.Current!.Resources["Cocoa.TextBrush"]
         };
@@ -83,7 +93,7 @@ public static class SimpleMessageBox
         // Ok/No (whichever reads as "didn't confirm") so awaiting callers never hang.
         dialog.Closed += (_, _) => tcs.TrySetResult(buttons == SimpleMessageBoxButtons.YesNo ? SimpleMessageBoxResult.No : SimpleMessageBoxResult.Ok);
 
-        dialog.ShowDialog(owner);
+        dialog.Show();
         return tcs.Task;
     }
 }

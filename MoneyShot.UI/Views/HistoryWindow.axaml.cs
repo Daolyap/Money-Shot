@@ -6,8 +6,9 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using MoneyShot.Models;
-using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
+using MoneyShot.UI.Interop;
+using MoneyShot.UI.Platform;
 using MoneyShot.UI.Services;
 
 namespace MoneyShot.UI.Views;
@@ -18,7 +19,7 @@ namespace MoneyShot.UI.Views;
 public partial class HistoryWindow : Window
 {
     private readonly HistoryService _history;
-    private readonly SaveService _saveService = new(new Win32Clipboard());
+    private readonly SaveService _saveService = new(PlatformServices.CreateClipboard());
 
     public HistoryWindow(HistoryService history)
     {
@@ -123,13 +124,17 @@ public partial class HistoryWindow : Window
         try
         {
             var editor = new EditorWindow(image);
-            await editor.ShowDialog(this);
+            await editor.ShowAsDialogAsync(this);
         }
         finally
         {
             // Same working-set trim the capture flow does — without it, opening a capture from
             // history left hundreds of MB of bitmap backings resident after the editor closed.
-            MemoryTrimmer.TrimAfterEditorClose();
+#if WINDOWS
+            MoneyShot.Platform.Windows.MemoryTrimmer.TrimAfterEditorClose();
+#else
+            MoneyShot.Platform.Linux.LinuxMemoryTrimmer.TrimAfterEditorClose();
+#endif
         }
     }
 

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Money Shot
+Comment=Capture, annotate, and share screenshots
+Exec=moneyshot
+Icon=moneyshot
+Terminal=false
+Categories=Graphics;Utility;
+StartupWMClass=MoneyShot.UI

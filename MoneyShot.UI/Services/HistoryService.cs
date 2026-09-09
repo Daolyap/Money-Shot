@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using Avalonia.Media.Imaging;
 using MoneyShot.Models;
+using MoneyShot.UI.Interop;
 using Logger = MoneyShot.Services.Logger;
 
 namespace MoneyShot.UI.Services;
@@ -26,10 +27,7 @@ public sealed class HistoryService
 
     public HistoryService()
     {
-        _historyDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MoneyShot",
-            "history");
+        _historyDirectory = Path.Combine(MoneyShot.Services.AppDataPaths.GetConfigRoot(), "MoneyShot", "history");
         try
         {
             Directory.CreateDirectory(_historyDirectory);
@@ -154,14 +152,49 @@ public sealed class HistoryService
         }
     }
 
+    /// <summary>
+    /// Downsamples via raw pixel nearest-neighbor sampling rather than Bitmap.CreateScaledBitmap
+    /// — confirmed by actually running this (see LINUX_PORT.md Phase 1 verification notes) that
+    /// CreateScaledBitmap throws "Invalid source bitmap type" on a WriteableBitmap source (which
+    /// is what every capture produces, via CapturedImage.ToAvaloniaBitmap). Also deliberately
+    /// always returns a distinct Bitmap object, even when no scaling is needed: the caller wraps
+    /// the result in a `using`, and the previous version's "already small enough, just return
+    /// source" fast path would alias the caller's own `image` argument — the `using` block would
+    /// then dispose the caller's bitmap out from under it (e.g. right before EditorWindow renders
+    /// it), for any capture at or under 400px wide.
+    /// </summary>
     private static Bitmap CreateThumbnail(Bitmap source)
     {
-        if (source.PixelSize.Width <= ThumbnailMaxWidth) return source;
-        var scale = (double)ThumbnailMaxWidth / source.PixelSize.Width;
-        var targetSize = new Avalonia.PixelSize(
-            ThumbnailMaxWidth,
-            Math.Max(1, (int)Math.Round(source.PixelSize.Height * scale)));
-        return source.CreateScaledBitmap(targetSize, BitmapInterpolationMode.HighQuality);
+        var captured = source.ToCapturedImage();
+        if (captured.Width <= ThumbnailMaxWidth) return captured.ToAvaloniaBitmap();
+
+        var scale = (double)ThumbnailMaxWidth / captured.Width;
+        var targetWidth = ThumbnailMaxWidth;
+        var targetHeight = Math.Max(1, (int)Math.Round(captured.Height * scale));
+        return DownsampleNearestNeighbor(captured, targetWidth, targetHeight).ToAvaloniaBitmap();
+    }
+
+    private static MoneyShot.Abstractions.CapturedImage DownsampleNearestNeighbor(MoneyShot.Abstractions.CapturedImage source, int targetWidth, int targetHeight)
+    {
+        const int bytesPerPixel = 4;
+        var destStride = targetWidth * bytesPerPixel;
+        var dest = new byte[destStride * targetHeight];
+
+        for (var ty = 0; ty < targetHeight; ty++)
+        {
+            var srcY = Math.Min(source.Height - 1, (int)((long)ty * source.Height / targetHeight));
+            var destRowOffset = ty * destStride;
+            var srcRowOffset = srcY * source.Stride;
+            for (var tx = 0; tx < targetWidth; tx++)
+            {
+                var srcX = Math.Min(source.Width - 1, (int)((long)tx * source.Width / targetWidth));
+                var srcOffset = srcRowOffset + srcX * bytesPerPixel;
+                var destOffset = destRowOffset + tx * bytesPerPixel;
+                Buffer.BlockCopy(source.PixelDataBgra32, srcOffset, dest, destOffset, bytesPerPixel);
+            }
+        }
+
+        return new MoneyShot.Abstractions.CapturedImage(targetWidth, targetHeight, destStride, dest);
     }
 
     private static void TryDelete(string path)

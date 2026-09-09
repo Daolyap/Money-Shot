@@ -15,9 +15,9 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MoneyShot.Models;
-using MoneyShot.Platform.Windows;
 using MoneyShot.UI.Editor;
 using MoneyShot.UI.Interop;
+using MoneyShot.UI.Platform;
 using MoneyShot.UI.Services;
 using Logger = MoneyShot.Services.Logger;
 
@@ -107,7 +107,7 @@ public partial class EditorWindow : Window
         InitializeComponent();
         ImageCanvas.RenderTransform = new TransformGroup { Children = { ZoomTransform, PanTransform } };
         _originalImage = image;
-        _saveService = new SaveService(new Win32Clipboard());
+        _saveService = new SaveService(PlatformServices.CreateClipboard());
         DisplayImage();
 
         KeyDown += EditorWindow_KeyDown;
@@ -1594,8 +1594,9 @@ public partial class EditorWindow : Window
         }
     }
 
-    private void CustomColorButton_Click(object? sender, RoutedEventArgs e)
+    private async void CustomColorButton_Click(object? sender, RoutedEventArgs e)
     {
+#if WINDOWS
         // Re-use the WinForms ColorDialog (already referenced for this reason — see
         // MoneyShot.UI.csproj) rather than hand-rolling an HSL picker — the OS picker is what
         // most users expect and supports the full palette. Matches the WPF build's reasoning.
@@ -1606,8 +1607,14 @@ public partial class EditorWindow : Window
             Color = System.Drawing.Color.FromArgb(_currentColor.A, _currentColor.R, _currentColor.G, _currentColor.B)
         };
         if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-
         var picked = Color.FromArgb(dlg.Color.A, dlg.Color.R, dlg.Color.G, dlg.Color.B);
+#else
+        // WinForms isn't referenced under net10.0 (Linux) — see SimpleColorDialog for why this is
+        // a small hand-rolled Avalonia window rather than an OS-native picker.
+        var result = await SimpleColorDialog.ShowAsync(this, _currentColor);
+        if (result == null) return;
+        var picked = result.Value;
+#endif
         _currentColor = picked;
         if (CustomColorButton != null)
         {
