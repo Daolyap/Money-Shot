@@ -51,7 +51,7 @@ Priority: optional
 Architecture: amd64
 Installed-Size: ${INSTALLED_SIZE_KB}
 Depends: libice6, libsm6, libx11-6, libxrandr2, libfontconfig1, libssl3
-Recommends: xclip | wl-clipboard, x11-xserver-utils
+Recommends: xclip | wl-clipboard, x11-xserver-utils, xdg-desktop-portal
 Maintainer: Daolyap & iSaluki <moneyshot@daolyap.dev>
 Homepage: https://github.com/Daolyap/Money-Shot
 Description: Capture, annotate, and share screenshots
@@ -59,10 +59,11 @@ Description: Capture, annotate, and share screenshots
  screen/monitor capture, a full annotation toolset (shapes, arrows, text,
  numbering, pixelate), history, and global hotkeys.
  .
- This build's Linux platform layer (X11 capture and hotkeys, StatusNotifierItem
- tray icon, XDG autostart, clipboard) targets X11 sessions — see the project's
- LINUX_PORT.md for current Wayland-specific caveats (global hotkeys, in
- particular, have no direct Wayland equivalent).
+ On X11 sessions, capture and global hotkeys use X11 directly. On Wayland
+ sessions, capture goes through the XDG Desktop Portal (xdg-desktop-portal,
+ pulled in via Recommends — present by default on mainstream KDE/GNOME
+ desktops); global hotkeys have no Wayland equivalent yet — see the project's
+ LINUX_PORT.md for details.
 EOF
 
 # update-desktop-database/gtk-update-icon-cache are best-effort: absent on some minimal systems

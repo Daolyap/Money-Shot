@@ -14,21 +14,39 @@
 > launched successfully**; an AppImage build path exists and was verified to build and run too.
 > `.github/workflows/build-linux.yml` builds and packages all three on every PR/release, and
 > `release.yml` attaches them to the same auto-created release the Windows MSI/zip go to.
-> **Remaining real gaps**: no Wayland-native capture or hotkeys (X11/XWayland only — see § 2 and
-> § 3), the tray icon has not been confirmed against a real desktop's StatusNotifierWatcher (only
-> confirmed to not crash without one), and `EditorWindow`'s deeper tool interactions (resize, crop,
-> zoom/pan, pixelate) were verified on Windows but not separately re-verified on Linux. See
-> § Migration phases for the full verified-vs-not breakdown per phase.
+> **Wayland capture (Phase 4, partial) added 2026-09**: `LinuxScreenCapture` now detects a Wayland
+> session (`$WAYLAND_DISPLAY`) and routes to `WaylandPortalScreenCapture`
+> (`org.freedesktop.portal.Screenshot` via `Tmds.DBus`) instead of X11 `XGetImage`, which does not
+> see native Wayland content. This closes the exact failure a real user hit on Fedora KDE (Plasma
+> Wayland, Fedora's and current Debian's default session type) — see § Wayland status. **This code
+> compiles clean and its D-Bus proxy/signal shapes were verified against Tmds.DBus's own documented
+> API and a real working example (its NetworkManager how-to), but it was not live-tested against a
+> real portal backend this round** — Docker Desktop hit an unrelated startup bug
+> (`sailor-ingest.sock` stale-rename failure) on this machine that a normal restart/WSL-shutdown
+> couldn't clear, blocking the headless-compositor test container that would have exercised it
+> end-to-end. Global hotkeys remain X11-only — `org.freedesktop.portal.GlobalShortcuts` (a larger,
+> separately-scoped feature) was not attempted. See § Phase 4 status for the exact verified/
+> not-verified breakdown.
+>
+> **Remaining real gaps**: Wayland global hotkeys (portal `GlobalShortcuts`, not attempted — tray
+> menu/in-app buttons remain the working alternative), the new Wayland capture path's live behavior
+> against a real compositor (see above), per-monitor capture under Wayland (portal has no per-output
+> selector outside the heavier ScreenCast API — see § 2), the tray icon has not been confirmed
+> against a real desktop's StatusNotifierWatcher (only confirmed to not crash without one), and
+> `EditorWindow`'s deeper tool interactions (resize, crop, zoom/pan, pixelate) were verified on
+> Windows but not separately re-verified on Linux. See § Migration phases for the full
+> verified-vs-not breakdown per phase.
 
 ## TL;DR
 
-The Linux port is **done for a v1 that matches today's Windows feature set on X11 sessions**:
-region/full-screen/monitor capture, the annotation editor, tray icon, global hotkeys, history,
-settings, and autostart all work on real Linux, packaged as `.deb`, `.rpm`, and AppImage. The
-remaining gap is **Wayland**: X11 direct-capture (`XGetImage`) and X11 global hotkeys
-(`XGrabKey`) are what's implemented, and neither has a real equivalent under a native Wayland
-session with no XWayland — see § Wayland status below for exactly what that means in practice on
-today's Debian/Fedora defaults.
+The Linux port matches today's Windows feature set on X11 sessions: region/full-screen/monitor
+capture, the annotation editor, tray icon, global hotkeys, history, settings, and autostart all work
+on real Linux, packaged as `.deb`, `.rpm`, and AppImage. On **Wayland** sessions (the default on
+current Debian and Fedora, including Fedora's KDE spin), full-screen and region capture now go
+through the XDG Desktop Portal instead of failing outright — implemented this round but not yet
+live-verified against a real compositor (see the status note above). Wayland **global hotkeys**
+remain unimplemented (no portal equivalent attempted yet); the tray menu and in-app capture buttons
+are the working fallback there. See § Wayland status below for what that means in practice.
 
 ## What ports cleanly (small or no changes)
 
@@ -67,7 +85,7 @@ WPF, which means `EditorWindow`'s 1900-line code-behind ports with mostly mechan
 (b) WPF-style XAML can be reused with minor namespace edits; (c) it has working hotkey, tray, and
 clipboard primitives on Linux out of the box.
 
-### 2. Capture pipeline — ✅ implemented (X11), Wayland still open
+### 2. Capture pipeline — ✅ implemented (X11, genuinely verified), ⚠️ implemented (Wayland, not yet live-verified)
 
 `MoneyShot.Platform.Linux/LinuxScreenCapture.cs` implements `IScreenCapture` via raw `libX11.so.6`
 P/Invoke (`X11Interop.cs`): `XGetImage` against the root window for full-screen and per-monitor
@@ -79,17 +97,43 @@ enumeration and `CaptureFullScreen` confirmed to return correct dimensions/geome
 standalone test harness, and a full capture triggered by a real `XGrabKey`-delivered hotkey was
 confirmed to render correctly inside `EditorWindow` (screenshotted and visually inspected).
 
-**Wayland is not implemented.** `XGetImage` against the root window only sees X11/XWayland
-content — under a native Wayland session (the default on current GNOME/KDE, meaning current
-Debian/Fedora out of the box) there is no root window with real pixels to read, so
-`LinuxScreenCapture` will either throw (`XOpenDisplay` fails with no X server at all) or silently
-capture nothing useful. The correct fix for native Wayland is the XDG Desktop Portal
-`org.freedesktop.portal.Screenshot` D-Bus service, which — critically — requires an interactive,
-per-capture consent dialog from the compositor (no instant, silent capture the way Windows/X11
-allow), a real and unavoidable UX change under Wayland policy. This was not implemented: no
-portal-backend service was available in any test environment used this session to build and verify
-against, and the interactive-consent-dialog UX question is a product decision, not just an
-implementation detail. See § Wayland status.
+**Wayland capture is now implemented, via the portal.** `XGetImage` against the X11 root window
+doesn't see native Wayland compositor content by design (Wayland's security model keeps that off-
+limits outside a brokered mechanism) — this is the exact failure a real user hit trying to capture
+on Fedora KDE (Plasma Wayland). `LinuxScreenCapture` now checks `$WAYLAND_DISPLAY` up front (the
+same signal GTK/Qt/SDL use, and the same one `LinuxClipboard` already checked for `wl-copy` vs
+`xclip`) and routes to `WaylandPortalScreenCapture.cs`, which calls the XDG Desktop Portal's
+`org.freedesktop.portal.Screenshot` D-Bus method (`interactive: false`, so the backend takes an
+immediate full screenshot rather than showing its own region picker — MoneyShot already has
+`RegionSelector` for that) via `Tmds.DBus` (a pure managed D-Bus client — no `libdbus` dependency),
+waits for the async `Request.Response` signal, and decodes the returned PNG (via SkiaSharp) into a
+`CapturedImage`.
+
+**Verified**: the code compiles cleanly on both TFMs, and the exact D-Bus proxy interface shapes
+(`[DBusInterface]`, `IDBusObject`, `Task<ObjectPath> ScreenshotAsync(...)`,
+`Task<IDisposable> WatchResponseAsync(Action<(uint, IDictionary<string,object>)>, ...)`,
+`IDictionary<string,object>` for `a{sv}`) were checked against Tmds.DBus's own published modelling
+docs and a real, complete working example (its NetworkManager `WatchStateChangedAsync` how-to) —
+not guessed from memory. **Not verified**: an actual round trip against a running portal backend
+(`xdg-desktop-portal` + `xdg-desktop-portal-kde`/`-gnome`/`-wlr`). This session's plan was to
+exercise it against a headless `sway` (wlroots) compositor + `xdg-desktop-portal-wlr` in a Docker
+container — the same kind of standalone-harness verification that caught the X11 capture path's
+real bugs — but Docker Desktop hit an unrelated startup bug on this machine (`sailor-ingest.sock`
+failed its internal stale-rename with "The file cannot be accessed by the system"; a full engine
+restart, deleting the stale socket via PowerShell/cmd/bash, and `wsl --shutdown` all failed to clear
+it) that blocked starting any container this session. **Treat the Wayland capture path as
+implemented-but-unverified until it's exercised against a real compositor** — the most likely risk
+areas if something's wrong: the D-Bus proxy method-name-to-signal-name mapping convention, the
+`handle_token`/response-race assumption (see the code's own comment on this), or a portal backend
+returning the `uri` result in a shape (e.g. always via the document portal, always requiring a
+`file://` URI with the caller's own read access) other than what's coded for.
+
+Only full-desktop capture is portal-based; there is no portal equivalent to xrandr's per-monitor
+geometry outside the much heavier ScreenCast API (which requires an interactive source-picker UI
+and hands back a live PipeWire stream, not a single screenshot — a different feature, not attempted
+this round). `GetAllMonitors()` under Wayland reports a single monitor spanning "everything the
+portal returns," matching the existing X11 fallback's graceful-degradation shape when `xrandr` is
+unavailable.
 
 ### 3. Global hotkeys — ✅ implemented (X11), no Wayland equivalent
 
@@ -103,14 +147,17 @@ and ran the full capture flow — this also validated the hand-derived `XKeyEven
 offsets used to read the keycode/modifier state back out of the raw X11 event buffer, which were
 computed by hand from the Xlib ABI and could easily have been wrong without this test.
 
-**Wayland has no direct equivalent** — compositors deliberately do not let clients grab input
-they don't have focus for. The portal `org.freedesktop.portal.GlobalShortcuts` API is the
-correct-but-not-implemented path (same reasoning as capture: needs a portal backend to build
-against, and changes the binding UX — the user binds the shortcut in system settings, not in
-MoneyShot). Under a pure Wayland session, `LinuxGlobalHotkeys.Initialize()` logs a warning and
-no-ops rather than crashing (mirrors `Win32GlobalHotkeys`' existing "combination may be in use"
-non-fatal pattern) — hotkeys just silently don't fire; the tray menu and in-app buttons remain the
-working alternative.
+**Wayland has no direct equivalent, and this is still not implemented** — compositors deliberately
+do not let clients grab input they don't have focus for. The portal
+`org.freedesktop.portal.GlobalShortcuts` API is the correct path, but it's a materially bigger
+feature than the Screenshot portal added this round: it needs its own session-creation handshake, a
+one-time interactive shortcut-binding dialog (the user binds the combination in the portal's own
+UI, not by typing it into MoneyShot's settings), and an `Activated` signal subscription per bound
+shortcut — different enough from a single request/response call that it was deliberately left out
+of this pass rather than rushed alongside the capture fix. Under a Wayland session,
+`LinuxGlobalHotkeys.Initialize()` still logs a warning and no-ops rather than crashing (mirrors
+`Win32GlobalHotkeys`' existing "combination may be in use" non-fatal pattern) — hotkeys just
+silently don't fire; the tray menu and in-app buttons remain the working alternative.
 
 ### 4. System tray (`NotifyIcon`) — ✅ implemented, reuses Avalonia's own cross-platform TrayIcon
 
@@ -526,34 +573,45 @@ individual step's shell commands were run for real, but the workflow files thems
 executed inside GitHub's own runner infrastructure yet. AUR (Arch) packaging remains
 community-maintainable but wasn't built here.
 
-**Phase 4 — Wayland (deferred, still not started).** Portal-based `org.freedesktop.portal.
-Screenshot` capture and `org.freedesktop.portal.GlobalShortcuts` hotkeys are the correct paths —
-see § 2 and § 3 for exactly what's missing and why it wasn't attempted this round (no portal
-backend service was available in any environment used to build/verify this port, and the
-interactive-consent-dialog UX change is a product decision that should be made deliberately, not
-implemented blind). **2–3 weeks if pursued**, unchanged from the original estimate — nothing done
-in Phase 2/3 reduces this, since Wayland capture/hotkeys are architecturally a different mechanism
-(D-Bus/portal) from the X11 approach actually implemented, not an extension of it.
+**Phase 4 — Wayland (capture done this round, not yet live-verified; hotkeys still deferred).**
+Portal-based `org.freedesktop.portal.Screenshot` capture is now implemented — see § 2 for what it
+does, how it was checked (against Tmds.DBus's own docs/examples, not guessed), and exactly what
+"not yet live-verified" means (Docker Desktop broke on this machine before a real portal backend
+could be exercised against it — see § 2's "Not verified" paragraph for the specific bug and what
+was tried). `org.freedesktop.portal.GlobalShortcuts` hotkeys remain **not implemented** — see § 3
+for why that's a separately-scoped, larger piece of work (its own session/binding-dialog/signal
+model, not a small extension of the Screenshot portal call). **Estimate for hotkeys alone, if
+pursued: ~1 week** (smaller than the original combined 2-3 week Phase 4 estimate now that capture
+is done) — most of the remaining cost is the interactive one-time binding-dialog flow and the
+inherent inability to test it without a real compositor + portal backend running, same limitation
+this round's capture work hit.
 
 ## Wayland status (read this before deploying to Debian/Fedora desktop users)
 
-**Both current Debian (12, "bookworm," GNOME on Wayland by default) and Fedora Workstation default
-to a native Wayland session out of the box.** On such a session, *as currently implemented*:
-- Screen capture will fail (`XOpenDisplay` finds no X server) unless the user is on an X11/Xorg
-  session, or a compositor exposing enough of an XWayland-visible surface for `XGetImage` to
-  return something meaningful (untested; likely to be incomplete or wrong even when it doesn't
-  outright fail).
-- Global hotkeys silently do nothing (logged once, then quiet) — the tray menu and in-app capture
-  buttons remain fully functional as the fallback.
+**Both current Debian (12, "bookworm," GNOME on Wayland by default) and Fedora Workstation
+(including its KDE Plasma spin) default to a native Wayland session out of the box.** On such a
+session, *as currently implemented*:
+- Screen capture (full-screen and region) now goes through the XDG Desktop Portal instead of
+  failing — this is the fix for the exact "Capture Error" a real user hit on Fedora KDE. **Not yet
+  verified against a real compositor** (see § 2) — if the portal backend on a given system behaves
+  differently than assumed (e.g. a different `results` shape, or `interactive: false` still
+  requiring some confirmation this session's code doesn't expect), it may still fail; if that
+  happens, the in-app error message will now at least come from the portal path (mentioning
+  `xdg-desktop-portal`) rather than the old X11 "could not open display" message, which helps
+  diagnose which case is occurring. Per-monitor capture ("Capture Monitor N") captures the whole
+  virtual desktop, not a single output — see § 2 for why.
+- Global hotkeys still silently do nothing (logged once, then quiet) — the tray menu and in-app
+  capture buttons remain fully functional as the fallback.
 - The tray icon, clipboard, and autostart all work regardless of X11 vs. Wayland — none of those
   three depend on the display-server-specific mechanisms above.
 
-**Practically**: this build is genuinely useful today for X11 sessions (still selectable at the
-login/display-manager screen on virtually every mainstream distro, including Debian and Fedora,
-even where Wayland is the default) and for the parts of a Wayland session that don't touch capture/
-hotkeys. It is **not** a full drop-in replacement for the Windows experience on a default modern
-Wayland desktop until Phase 4 lands. This should be stated plainly in any release notes / README
-for the Linux build, not discovered by users via a silent capture failure.
+**Practically**: X11 sessions (still selectable at the login/display-manager screen on virtually
+every mainstream distro, including Debian and Fedora — on KDE specifically, the gear-icon session
+picker at the SDDM login screen offers "Plasma (X11)" alongside the default "Plasma (Wayland)")
+remain the best-tested path today and are guaranteed to work with everything in this port,
+including hotkeys. Wayland sessions now get working capture (pending live verification — see
+above) but still no global hotkeys. This should be stated plainly in any release notes / README for
+the Linux build.
 
 ## Packaging on Linux
 
@@ -595,17 +653,23 @@ Still genuinely open:
   single-monitor. `RegionSelector`'s DPI-aware crop math (already fixed for WPF's 125%-scaling
   bug, see `Opus-Speaks.md` § E2, and ported into the Avalonia build using `Screens.Primary.
   Scaling`) has not been exercised at a non-100% Linux scale factor at all.
-- **Wayland** — see § Wayland status above; this is the single largest remaining gap.
+- **Wayland global hotkeys** — see § Wayland status above; capture is now implemented (pending live
+  verification), hotkeys are not.
+- **The new Wayland capture path's live behavior** — implemented and checked against Tmds.DBus's
+  own docs/examples, but not yet run against a real portal backend (Docker Desktop broke on this
+  dev machine before that test could happen — see § 2). First thing to verify once Docker (or any
+  other Linux environment with a real KDE/GNOME Wayland session) is available again.
 
 ## Decision matrix for the team
 
-The build/no-build decision this table originally framed is now moot — Phases 0–3 are done. What's
-left is a narrower question: **is Wayland support (Phase 4) worth 2–3 more weeks**, given the port
-already works on X11 sessions (still selectable at login on virtually every mainstream distro) and
+The build/no-build decision this table originally framed is now moot — Phases 0–3 are done, and
+Phase 4's capture half is implemented. What's left is narrower: **is Wayland global hotkeys worth
+~1 more week**, given capture (the more commonly hit gap — it's what a real user's Fedora KDE bug
+report was about) now works there too, X11 sessions already have full hotkey support, and
 X11-independent features (tray, clipboard, autostart, packaging) work regardless of session type.
-That's a product call — how many target users are on a Wayland-only setup with no X11 fallback —
-not an engineering-feasibility one; the engineering path (portal-based capture + GlobalShortcuts,
-with an interactive per-capture consent dialog as an unavoidable UX change) is understood and
+That's still partly a product call (how many target users rely on a global hotkey specifically, on
+a Wayland-only setup with no X11 fallback) but a smaller one than before — the engineering path
+(portal `GlobalShortcuts`, with its own one-time interactive binding-dialog UX) is understood and
 documented above, just not built.
 
 ## What actually changed (concrete list)
@@ -615,7 +679,9 @@ Reflects what was actually done, not a pre-port plan — the shipping WPF app (`
 platform-neutral code both builds use (`MoneyShot.Core`).
 
 - `MoneyShot.Platform.Linux/` (new project) — `LinuxScreenCapture.cs`, `LinuxGlobalHotkeys.cs`,
-  `X11Interop.cs`, `LinuxAutoStart.cs`, `LinuxClipboard.cs`, `LinuxMemoryTrimmer.cs`
+  `X11Interop.cs`, `LinuxAutoStart.cs`, `LinuxClipboard.cs`, `LinuxMemoryTrimmer.cs`, plus (2026-09,
+  Phase 4) `WaylandPortalScreenCapture.cs` — XDG portal capture for Wayland sessions, and a new
+  `Tmds.DBus` package reference (pure managed, no native/libdbus dependency, no packaging impact)
 - `MoneyShot.UI/MoneyShot.UI.csproj` — multi-targets `net10.0-windows;net10.0`; TFM-conditional
   `ProjectReference`s to `Platform.Windows`/`Platform.Linux`; `WINDOWS` compile constant for the
   Windows TFM only; `SkiaSharp.NativeAssets.Linux` explicitly pinned (see the SkiaSharp bug above);

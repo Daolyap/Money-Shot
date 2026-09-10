@@ -7,25 +7,31 @@ using MoneyShot.Services;
 namespace MoneyShot.Platform.Linux;
 
 /// <summary>
-/// X11-based screen capture (XGetImage on the root window) — the Linux counterpart to
-/// Win32ScreenCapture. See LINUX_PORT.md § Capture pipeline / Phase 2.
+/// Screen capture — the Linux counterpart to Win32ScreenCapture. See LINUX_PORT.md § Capture
+/// pipeline / Phase 2 and § Wayland status / Phase 4.
 ///
-/// This only works under an X11 session (a real Xorg session, or XWayland for apps that don't
-/// need pixels from native-Wayland surfaces — capturing the root window through XWayland reliably
-/// returns whatever XWayland itself is compositing, which in practice means Xorg-session content;
-/// behavior when the *only* thing running is a pure-Wayland compositor with no X clients at all is
-/// untested here). A portal-based (org.freedesktop.portal.Screenshot) implementation would be the
-/// correct approach for native Wayland sessions (GNOME/KDE Wayland, now the default on most
-/// mainstream distros including Debian/Fedora) but requires an interactive per-capture permission
-/// dialog from the compositor — a real UX change from Windows' instant, silent capture — and portal
-/// backend services aren't present in this development environment to implement against
-/// interactively (see LINUX_PORT.md Phase 2 status). Treat this class as the X11-session path only;
-/// a portal-based path is the documented, tracked gap for pure-Wayland sessions.
+/// Dispatches on session type via $WAYLAND_DISPLAY (the same signal GTK/Qt/SDL use, and the same
+/// check LinuxClipboard already makes for wl-copy vs xclip):
+/// - X11 session (no $WAYLAND_DISPLAY): XGetImage on the root window, as before.
+/// - Wayland session ($WAYLAND_DISPLAY set): routed to WaylandPortalScreenCapture
+///   (org.freedesktop.portal.Screenshot) instead of trying XGetImage through XWayland first. Even
+///   though XWayland is normally running under a native Wayland session (so XOpenDisplay would
+///   still succeed), capturing the X11 root window through it does not reliably see native-Wayland
+///   surface content — Wayland's security model deliberately keeps that off-limits outside a
+///   brokered mechanism like the portal — so this checks the session type up front rather than
+///   waiting for XGetImage to fail or (worse) silently return wrong pixels.
 /// </summary>
 public sealed class LinuxScreenCapture : IScreenCapture
 {
+    private static bool IsWaylandSession() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+
     public CapturedImage CaptureFullScreen()
     {
+        if (IsWaylandSession())
+        {
+            return WaylandPortalScreenCapture.CaptureFullScreen();
+        }
+
         var display = OpenDisplayOrThrow();
         try
         {
@@ -46,6 +52,13 @@ public sealed class LinuxScreenCapture : IScreenCapture
         if (monitorIndex < 0 || monitorIndex >= monitors.Count)
             throw new ArgumentOutOfRangeException(nameof(monitorIndex));
 
+        if (IsWaylandSession())
+        {
+            // GetAllMonitorsWayland() only ever reports one entry (no portal-level per-output
+            // geometry — see its comment), so any valid index here means "the whole screenshot."
+            return WaylandPortalScreenCapture.CaptureFullScreen();
+        }
+
         var m = monitors[monitorIndex];
         var display = OpenDisplayOrThrow();
         try
@@ -60,6 +73,11 @@ public sealed class LinuxScreenCapture : IScreenCapture
 
     public IReadOnlyList<MonitorInfo> GetAllMonitors()
     {
+        if (IsWaylandSession())
+        {
+            return GetAllMonitorsWayland();
+        }
+
         // Shelling out to `xrandr --query` rather than P/Invoking libXrandr directly: the RandR
         // protocol's monitor-enumeration ABI (XRRGetMonitors et al.) has changed shape across
         // versions, whereas xrandr's plain-text --query output has been stable for over a decade
@@ -105,6 +123,22 @@ public sealed class LinuxScreenCapture : IScreenCapture
         }
 
         return result;
+    }
+
+    private static List<MonitorInfo> GetAllMonitorsWayland()
+    {
+        // No portable, desktop-agnostic way to enumerate per-monitor geometry on Wayland short of
+        // a compositor-specific tool (kscreen-doctor on KDE, org.gnome.Mutter.DisplayConfig on
+        // GNOME, swaymsg on wlroots compositors, ...) whose output shape can't be verified without
+        // that specific desktop to test against, or the heavier ScreenCast portal's interactive
+        // source picker (a different, much larger feature — see LINUX_PORT.md Phase 4). Rather than
+        // guess at one tool's JSON and risk silently-wrong monitor bounds, this reports a single
+        // entry spanning whatever the Screenshot portal actually returns — CaptureMonitor(0)
+        // captures that whole thing, the same graceful-degradation shape as FallbackSingleMonitor()
+        // below when xrandr is unavailable under X11. Width/Height are left at 0 (unknown) since no
+        // MoneyShot.UI caller renders them — only Count and IsPrimary are used (monitor buttons/
+        // hotkey list are built from those alone).
+        return new List<MonitorInfo> { new(0, 0, 0, 0, true, "Wayland session (all displays)") };
     }
 
     private static List<MonitorInfo> FallbackSingleMonitor()

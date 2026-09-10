@@ -44,9 +44,11 @@ installer and CI release pipeline both build it, unchanged; it is Windows-only a
 `Packaging/linux/` and `.github/workflows/build-linux.yml`. It is **not** wired into the Windows
 MSI/release pipeline (that stays on the WPF app) — don't touch WPF's behavior when working on
 `MoneyShot.UI`. Before relying on `MoneyShot.UI` for anything beyond what `LINUX_PORT.md` documents
-as verified, read its Phase 1/2/3 status sections — most core flows (capture, editor, history,
-settings, tray, packaging) are genuinely verified against real Windows and Linux runs; some
-(`EditorWindow`'s deeper tools, multi-monitor/HiDPI on Linux, Wayland entirely) are not.
+as verified, read its Phase 1-4 status sections — most core flows (capture, editor, history,
+settings, tray, packaging) are genuinely verified against real Windows and Linux (X11) runs; some
+(`EditorWindow`'s deeper tools, multi-monitor/HiDPI on Linux, Wayland global hotkeys) are not, and
+Wayland capture specifically is implemented but not yet live-verified against a real compositor —
+see `LINUX_PORT.md` § 2.
 
 - **`MoneyShot.Core`** (`net10.0`, no UI/Windows dependency) — Models, `SettingsService`, `Logger`,
   `AutoUpdateService`, `HotKeyParser`, `AppDataPaths` (resolves the per-user config root —
@@ -59,10 +61,13 @@ settings, tray, packaging) are genuinely verified against real Windows and Linux
   Deliberately UI-framework-agnostic (references WinForms only for `NotifyIcon`/`Clipboard`, not
   WPF) so the same implementations work under both `MoneyShot` (WPF) and `MoneyShot.UI` (Avalonia).
 - **`MoneyShot.Platform.Linux`** (`net10.0`, no Avalonia dependency) — `LinuxScreenCapture` (X11
-  `XGetImage` + `xrandr`-parsed monitor bounds), `LinuxGlobalHotkeys` (X11 `XGrabKey`),
-  `LinuxAutoStart` (XDG `~/.config/autostart/*.desktop`), `LinuxClipboard` (SkiaSharp PNG-encode +
-  `wl-copy`/`xclip`), `LinuxMemoryTrimmer`. X11-only — no Wayland-native capture/hotkeys yet (see
-  `LINUX_PORT.md`'s Wayland-status section).
+  `XGetImage` + `xrandr`-parsed monitor bounds on an X11 session; routes to
+  `WaylandPortalScreenCapture`, an `org.freedesktop.portal.Screenshot` call via `Tmds.DBus`, when
+  `$WAYLAND_DISPLAY` is set — implemented but not yet live-verified against a real compositor, see
+  `LINUX_PORT.md` § 2/Phase 4), `LinuxGlobalHotkeys` (X11 `XGrabKey` — still X11-only, no Wayland
+  `GlobalShortcuts` portal yet), `LinuxAutoStart` (XDG `~/.config/autostart/*.desktop`),
+  `LinuxClipboard` (SkiaSharp PNG-encode + `wl-copy`/`xclip`), `LinuxMemoryTrimmer`. See
+  `LINUX_PORT.md`'s Wayland-status section for exactly what works on which session type.
 - **`MoneyShot`** (WPF, Windows-only) — every XAML window, plus `SaveService`/`HistoryService`
   (`BitmapSource`-based). `Interop/BitmapConversions.cs` converts `CapturedImage` ↔ `BitmapSource`
   at the UI boundary.

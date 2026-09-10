@@ -4,9 +4,10 @@
     <!-- Plain net10.0, not net10.0-windows/-linux: this project is consumed by MoneyShot.UI's
          net10.0 TargetFramework (see LINUX_PORT.md Phase 2), which is the "everything that isn't
          Windows" build. Nothing here is expected to run correctly on macOS — only Linux (X11
-         sessions; see LinuxGlobalHotkeys/LinuxScreenCapture for the Wayland caveats) is a
-         supported target, but there's no net10.0-linux TFM in .NET, so this is gated at runtime
-         via OperatingSystem.IsLinux() checks where it matters, not at the TFM level. -->
+         sessions for everything; Wayland sessions for capture only as of Phase 4 — see
+         LinuxGlobalHotkeys/LinuxScreenCapture for the exact per-feature breakdown) is a supported
+         target, but there's no net10.0-linux TFM in .NET, so this is gated at runtime via
+         OperatingSystem.IsLinux() checks where it matters, not at the TFM level. -->
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -30,6 +31,10 @@
          native library that's API-incompatible with managed SkiaSharp 4.151.2, confirmed by
          actually running a published build and hitting the resulting TypeInitializationException. -->
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.2" />
+    <!-- WaylandPortalScreenCapture's org.freedesktop.portal.Screenshot D-Bus call (Phase 4 — see
+         LINUX_PORT.md § 2). Pure managed D-Bus client (talks the wire protocol over a Socket
+         directly), no libdbus/native dependency and no packaging impact. -->
+    <PackageReference Include="Tmds.DBus" Version="0.95.1" />
   </ItemGroup>
 
 </Project>

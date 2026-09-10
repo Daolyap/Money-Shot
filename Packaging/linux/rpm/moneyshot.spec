@@ -6,7 +6,7 @@ License: Proprietary
 URL: https://github.com/Daolyap/Money-Shot
 BuildArch: x86_64
 Requires: libICE, libSM, libX11, libXrandr, fontconfig, openssl-libs
-Recommends: xclip
+Recommends: xclip, xdg-desktop-portal
 AutoReqProv: no
 
 %description
@@ -14,10 +14,11 @@ Money Shot is a screenshot capture and annotation tool with region/full-screen/
 monitor capture, a full annotation toolset (shapes, arrows, text, numbering,
 pixelate), history, and global hotkeys.
 
-This build's Linux platform layer (X11 capture and hotkeys, StatusNotifierItem
-tray icon, XDG autostart, clipboard) targets X11 sessions — see the project's
-LINUX_PORT.md for current Wayland-specific caveats (global hotkeys, in
-particular, have no direct Wayland equivalent).
+On X11 sessions, capture and global hotkeys use X11 directly. On Wayland
+sessions, capture goes through the XDG Desktop Portal (xdg-desktop-portal,
+pulled in via Recommends — present by default on Fedora Workstation/KDE
+spins); global hotkeys have no Wayland equivalent yet — see the project's
+LINUX_PORT.md for details.
 
 %install
 rm -rf %{buildroot}
