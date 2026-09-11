@@ -4,14 +4,21 @@ using Tmds.DBus;
 
 namespace MoneyShot.Platform.Linux;
 
+// Tmds.DBus builds the proxy for these at runtime via Reflection.Emit (Connection.CreateProxy<T>),
+// in a *different* dynamic assembly ("Tmds.DBus.Emit") — an internal interface is inaccessible to
+// that assembly and CreateTypeInfoImpl() throws TypeLoadException ("attempting to implement an
+// inaccessible interface"). Confirmed by actually hitting this on a real Fedora KDE run: both
+// interfaces must be public, no way around it short of InternalsVisibleTo (which still wouldn't
+// help — Tmds.DBus's emit assembly name/key isn't something this project controls to add a
+// matching InternalsVisibleTo for).
 [DBusInterface("org.freedesktop.portal.Screenshot")]
-internal interface IScreenshotPortal : IDBusObject
+public interface IScreenshotPortal : IDBusObject
 {
     Task<ObjectPath> ScreenshotAsync(string parentWindow, IDictionary<string, object> options);
 }
 
 [DBusInterface("org.freedesktop.portal.Request")]
-internal interface IPortalRequest : IDBusObject
+public interface IPortalRequest : IDBusObject
 {
     Task<IDisposable> WatchResponseAsync(Action<(uint response, IDictionary<string, object> results)> handler, Action<Exception>? onError = null);
 }
