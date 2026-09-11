@@ -1,0 +1,216 @@
+<Window x:Class="MoneyShot.UI.Views.SettingsWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings — Money Shot" Height="640" Width="700"
+        MinHeight="500" MinWidth="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Cocoa.WindowBrush}"
+        Foreground="{StaticResource Cocoa.TextBrush}"
+        FontFamily="Segoe UI"
+        ExtendClientAreaToDecorationsHint="True"
+        WindowDecorations="None"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        CanResize="True">
+
+    <Window.Resources>
+        <x:Double x:Key="SectionTitleFontSize">14</x:Double>
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="TextBlock.section-title">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Cocoa.TextBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <Style Selector="TextBlock.field-label">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource Cocoa.TextSecondaryBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="Theme" Value="{StaticResource CocoaCheckBox}"/>
+            <Setter Property="Margin" Value="0,5"/>
+        </Style>
+        <Style Selector="RadioButton">
+            <Setter Property="Theme" Value="{StaticResource CocoaRadioButton}"/>
+            <Setter Property="Margin" Value="0,4"/>
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="Height" Value="32"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ░░ Title bar ░░ -->
+        <Border Grid.Row="0" Background="{StaticResource Cocoa.TitleBarBrush}"
+                BorderBrush="{StaticResource Cocoa.BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                PointerPressed="TitleBar_PointerPressed">
+            <Grid Height="32">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <TextBlock Text="Money Shot" FontSize="12.5" FontWeight="SemiBold"
+                               Foreground="{StaticResource Cocoa.TextBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Settings" FontSize="12.5" Margin="8,0,0,0"
+                               Foreground="{StaticResource Cocoa.TextMutedBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Click="Minimize_Click" Theme="{StaticResource TitleBarButton}" Focusable="False">
+                        <Path Theme="{StaticResource CaptionIcon}" Data="{StaticResource Icon.WindowMinimize}"/>
+                    </Button>
+                    <Button Name="MaximizeRestoreButton" Click="MaximizeRestore_Click"
+                            Theme="{StaticResource TitleBarButton}" Focusable="False">
+                        <Path Name="MaximizeRestoreIcon" Theme="{StaticResource CaptionIcon}"
+                              Data="{StaticResource Icon.WindowMaximize}"/>
+                    </Button>
+                    <Button Click="Close_Click" Theme="{StaticResource TitleBarCloseButton}" Focusable="False">
+                        <Path Theme="{StaticResource CaptionIcon}" Data="{StaticResource Icon.WindowClose}"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ░░ Content ░░ -->
+        <Grid Grid.Row="1" Margin="22,18,22,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,0,6,0">
+                    <!-- General -->
+                    <Border Theme="{StaticResource CocoaCard}" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="General" Classes="section-title"/>
+                            <CheckBox Name="StartInTrayCheckbox" Content="Start in system tray"/>
+                            <CheckBox Name="RunOnStartupCheckbox" Content="Run on Windows startup"/>
+                            <CheckBox Name="MinimizeToTrayCheckbox" Content="Minimize to system tray"/>
+                            <CheckBox Name="CheckForUpdatesCheckbox" Content="Check for updates on startup"
+                                      ToolTip.Tip="Automatically check for new versions when the application starts"/>
+                            <CheckBox Name="DisableWindowsPrintScreenCheckbox"
+                                      Content="Disable Windows built-in Print Screen snipping shortcut"
+                                      ToolTip.Tip="Controls the Windows setting 'Use Print Screen key to open screen capture' so Money Shot can own the key"/>
+                            <CheckBox Name="HideUiFromScreenshotsCheckbox"
+                                      Content="Hide Money Shot windows from screenshots"
+                                      ToolTip.Tip="Captures a frozen frame before showing any selection UI, so Money Shot never appears in your screenshots"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Hotkeys -->
+                    <Border Theme="{StaticResource CocoaCard}" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="Hotkeys" Classes="section-title"/>
+
+                            <TextBlock Text="Full screen capture" Classes="field-label"/>
+                            <ComboBox Name="HotKeyCaptureComboBox">
+                                <ComboBoxItem Content="PrintScreen" IsSelected="True"/>
+                                <ComboBoxItem Content="Ctrl+PrintScreen"/>
+                                <ComboBoxItem Content="Alt+PrintScreen"/>
+                                <ComboBoxItem Content="Shift+PrintScreen"/>
+                                <ComboBoxItem Content="Ctrl+Shift+PrintScreen"/>
+                                <ComboBoxItem Content="F1"/>
+                                <ComboBoxItem Content="Ctrl+F1"/>
+                                <ComboBoxItem Content="Alt+F1"/>
+                                <ComboBoxItem Content="F5"/>
+                                <ComboBoxItem Content="Ctrl+F5"/>
+                            </ComboBox>
+
+                            <TextBlock Text="Region capture" Classes="field-label" Margin="0,12,0,5"/>
+                            <ComboBox Name="HotKeyRegionCaptureComboBox">
+                                <ComboBoxItem Content="PrintScreen"/>
+                                <ComboBoxItem Content="Ctrl+PrintScreen" IsSelected="True"/>
+                                <ComboBoxItem Content="Alt+PrintScreen"/>
+                                <ComboBoxItem Content="Shift+PrintScreen"/>
+                                <ComboBoxItem Content="Ctrl+Shift+PrintScreen"/>
+                                <ComboBoxItem Content="F2"/>
+                                <ComboBoxItem Content="Ctrl+F2"/>
+                                <ComboBoxItem Content="Alt+F2"/>
+                                <ComboBoxItem Content="F6"/>
+                                <ComboBoxItem Content="Ctrl+F6"/>
+                            </ComboBox>
+
+                            <TextBlock Text="Individual monitor capture" Classes="field-label" Margin="0,14,0,4"/>
+                            <TextBlock Name="MonitorHotkeysInfo" Foreground="{StaticResource Cocoa.TextSecondaryBrush}"
+                                       FontSize="12" TextWrapping="Wrap"/>
+                            <TextBlock Text="Individual monitor hotkeys are fixed and cannot be customized."
+                                       Foreground="{StaticResource Cocoa.TextMutedBrush}" FontSize="11"
+                                       FontStyle="Italic" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Saving -->
+                    <Border Theme="{StaticResource CocoaCard}" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="Saving" Classes="section-title"/>
+
+                            <TextBlock Text="Default save destination" Classes="field-label"/>
+                            <RadioButton Name="SaveToClipboardRadio" Content="Clipboard only" GroupName="SaveDestination"/>
+                            <RadioButton Name="SaveToFileRadio" Content="File only" GroupName="SaveDestination"/>
+                            <RadioButton Name="SaveToBothRadio" Content="Both clipboard and file" GroupName="SaveDestination"/>
+
+                            <TextBlock Text="Default save folder" Classes="field-label" Margin="0,14,0,5"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Name="SavePathTextBox" Grid.Column="0" Margin="0,0,10,0"/>
+                                <Button Grid.Column="1" Content="Browse…" Click="BrowsePath_Click"
+                                        Theme="{StaticResource SubtleButton}" Padding="14,7"/>
+                            </Grid>
+
+                            <TextBlock Text="Default file format" Classes="field-label" Margin="0,14,0,5"/>
+                            <ComboBox Name="FormatComboBox" Width="160" HorizontalAlignment="Left">
+                                <ComboBoxItem Content="PNG" IsSelected="True"/>
+                                <ComboBoxItem Content="JPG"/>
+                                <ComboBoxItem Content="BMP"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- History -->
+                    <Border Theme="{StaticResource CocoaCard}">
+                        <StackPanel>
+                            <TextBlock Text="Capture history" Classes="section-title"/>
+                            <CheckBox Name="SaveToHistoryCheckbox" Content="Keep a local history of captures"
+                                      ToolTip.Tip="Stores each capture on this PC so you can reopen it later. Never uploaded anywhere."/>
+
+                            <TextBlock Text="Keep the most recent" Classes="field-label" Margin="0,12,0,5"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox Name="HistoryRetentionTextBox" Width="70"/>
+                                <TextBlock Text="captures (0–500)" Foreground="{StaticResource Cocoa.TextMutedBrush}"
+                                           FontSize="12" VerticalAlignment="Center" Margin="9,0,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                <Button Content="Open history folder" Click="OpenHistoryFolder_Click"
+                                        Theme="{StaticResource SubtleButton}" Padding="13,7" Margin="0,0,8,0"/>
+                                <Button Content="Clear history…" Click="ClearHistory_Click"
+                                        Theme="{StaticResource SubtleButton}" Padding="13,7"/>
+                            </StackPanel>
+                            <TextBlock Name="HistoryFolderText" Foreground="{StaticResource Cocoa.TextMutedBrush}"
+                                       FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Footer -->
+            <Grid Grid.Row="1" Margin="0,16,0,0">
+                <Button Content="View logs" Click="ViewLogs_Click" Theme="{StaticResource ToolButton}"
+                        HorizontalAlignment="Left" Padding="12,8"
+                        ToolTip.Tip="Open the Money Shot log folder"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Cancel" Click="Cancel_Click" Theme="{StaticResource SubtleButton}"
+                            Padding="18,9" Margin="0,0,8,0"/>
+                    <Button Content="Save" Click="Save_Click" Theme="{StaticResource AccentButton}" Padding="22,9"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

@@ -45,32 +45,53 @@ dotnet run --project MoneyShot/MoneyShot.csproj
 
 ## Project Structure
 
+The solution is split across four projects, the biggest structural change made in the Linux-port
+groundwork (LINUX_PORT.md Phase 0):
+
+- **MoneyShot.Core** (`net10.0`, no UI/Windows dependency) — Models, `SettingsService`, `Logger`,
+  `AutoUpdateService`, `HotKeyParser`, and the platform abstraction interfaces (`IScreenCapture`,
+  `IGlobalHotkeys`, `ITrayIcon`, `IAutoStart`, `IClipboard` — all in `MoneyShot.Abstractions`).
+- **MoneyShot.Platform.Windows** (`net10.0-windows`, no WPF dependency) — the Win32/WinForms
+  implementations of those interfaces: `Win32ScreenCapture`, `Win32GlobalHotkeys`, `Win32TrayIcon`,
+  `Win32AutoStart`, `Win32Clipboard`.
+- **MoneyShot** (`net10.0-windows`, WPF) — all the XAML windows, plus `SaveService` and
+  `HistoryService` (still WPF-`BitmapSource`-based; a Linux port would give these an Avalonia twin
+  in Phase 1). `Interop/BitmapConversions.cs` converts between the neutral `CapturedImage` type and
+  WPF's `BitmapSource` at the UI boundary.
+- **MoneyShot.Tests** — xUnit tests, referencing all three of the above.
+
 ### Core Services
 
-#### ScreenshotService
-Handles screen capture functionality:
-- `CaptureFullScreen()` - Captures all screens
-- `CaptureRegion(Rectangle)` - Captures specific region
-- `CaptureScreen(int)` - Captures single screen by index
+#### Win32ScreenCapture (implements IScreenCapture)
+Handles screen capture functionality, in MoneyShot.Platform.Windows:
+- `CaptureFullScreen()` - Captures all screens, returns a neutral `CapturedImage` (raw BGRA32 pixels)
+- `CaptureMonitor(int)` - Captures single screen by index
+- `GetAllMonitors()` - Returns bounds/primary-flag for every connected display
+- Reads pixels via `Bitmap.LockBits` rather than the old `GetHbitmap`→`CreateBitmapSourceFromHBitmap`→`DeleteObject`
+  dance, so there's no HBITMAP handle to leak
+- The WPF layer converts `CapturedImage` → `BitmapSource` via `Interop/BitmapConversions.ToBitmapSource()`
 
 #### SaveService
-Manages saving screenshots:
+Manages saving screenshots (WPF project — takes an `IClipboard` so clipboard access still goes
+through the platform abstraction):
 - `SaveToClipboard(BitmapSource)` - Copies to clipboard
 - `SaveToFile(BitmapSource, string, string)` - Saves to file
 - `SaveImage(BitmapSource, SaveDestination, string, string)` - Combined save
 
 #### SettingsService
-Handles application settings:
+Handles application settings (MoneyShot.Core):
 - `LoadSettings()` - Loads user settings from JSON
 - `SaveSettings(AppSettings)` - Saves settings to JSON
-- `SetStartupWithWindows(bool)` - Configures Windows startup
 
-#### HotKeyService
-Manages global keyboard shortcuts:
-- `Initialize(window)` - Initializes hotkey listener with window handle
-- `RegisterHotKey(modifiers, key, action)` - Registers hotkey
-- `UnregisterHotKey(id)` - Removes hotkey
-- `ParseHotKey(string)` - Parses hotkey strings like "Ctrl+PrintScreen"
+Registry-backed startup/print-screen settings moved to `IAutoStart` (`Win32AutoStart` in
+MoneyShot.Platform.Windows) as part of the Linux-port groundwork — see LINUX_PORT.md Phase 0.
+
+#### Win32GlobalHotkeys (implements IGlobalHotkeys)
+Manages global keyboard shortcuts, in MoneyShot.Platform.Windows:
+- `Initialize(IntPtr windowHandle)` - Hooks WM_HOTKEY on the given window handle via a WinForms
+  `NativeWindow` subclass (not `HwndSource.AddHook`, so this project has no WPF dependency)
+- `RegisterHotKeyFromString(string, Action)` - Parses (via `HotKeyParser` in MoneyShot.Core) and registers a hotkey
+- `UnregisterAll()` - Removes every registered hotkey
 - Uses Win32 API for global hotkey registration
 
 #### AutoUpdateService

@@ -1,84 +1,14 @@
-using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Interop;
-
 namespace MoneyShot.Services;
 
-public class HotKeyService
+/// <summary>
+/// Parses hotkey strings like "Ctrl+PrintScreen" or "Ctrl+Shift+1" into Win32 modifier/virtual-key
+/// codes. Pure and platform-neutral — kept in Core so every IGlobalHotkeys implementation (Windows
+/// today, X11 later, per LINUX_PORT.md) shares one parsing contract for the strings SettingsService
+/// persists. The modifier/key constants below are Win32 RegisterHotKey values; a non-Windows
+/// implementation maps them to its own native equivalents (e.g. X11 keysyms) internally.
+/// </summary>
+public static class HotKeyParser
 {
-    private const int WM_HOTKEY = 0x0312;
-    private readonly Dictionary<int, Action> _hotKeyActions = new();
-    private int _currentId = 0;
-    private IntPtr _windowHandle;
-
-    [DllImport("user32.dll")]
-    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
-
-    public void Initialize(Window window)
-    {
-        var helper = new WindowInteropHelper(window);
-        _windowHandle = helper.Handle;
-        var source = HwndSource.FromHwnd(_windowHandle);
-        source?.AddHook(HwndHook);
-    }
-
-    public int RegisterHotKey(uint modifiers, uint key, Action action)
-    {
-        _currentId++;
-        if (RegisterHotKey(_windowHandle, _currentId, modifiers, key))
-        {
-            _hotKeyActions[_currentId] = action;
-            return _currentId;
-        }
-
-        // Most often the combination is already claimed by another application (or by a
-        // still-running instance). Without this log the hotkey just silently does nothing.
-        Logger.Warn($"RegisterHotKey failed for modifiers=0x{modifiers:X} key=0x{key:X} — combination may be in use by another application.");
-        return -1;
-    }
-
-    public void UnregisterHotKey(int id)
-    {
-        UnregisterHotKey(_windowHandle, id);
-        _hotKeyActions.Remove(id);
-    }
-
-    public void UnregisterAll()
-    {
-        foreach (var id in _hotKeyActions.Keys.ToList())
-        {
-            UnregisterHotKey(_windowHandle, id);
-        }
-        _hotKeyActions.Clear();
-        _currentId = 0; // Reset ID counter
-    }
-
-    private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == WM_HOTKEY)
-        {
-            var id = wParam.ToInt32();
-            if (_hotKeyActions.TryGetValue(id, out var action))
-            {
-                try
-                {
-                    action?.Invoke();
-                }
-                catch (Exception ex)
-                {
-                    // An exception escaping a window-procedure hook can take down the process;
-                    // a failed capture should be logged, not fatal.
-                    Logger.Error("Hotkey action threw", ex);
-                }
-                handled = true;
-            }
-        }
-        return IntPtr.Zero;
-    }
-
     // Virtual key codes
     public const uint VK_SNAPSHOT = 0x2C; // Print Screen
     public const uint VK_0 = 0x30;
@@ -217,34 +147,5 @@ public class HotKeyService
         }
 
         return (modifiers, key);
-    }
-
-    /// <summary>
-    /// Register a hotkey from a string like "Ctrl+PrintScreen"
-    /// </summary>
-    public int RegisterHotKeyFromString(string hotkeyString, Action action)
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(hotkeyString))
-            {
-                Logger.Warn("Hotkey string is null or empty");
-                return -1;
-            }
-            
-            var (modifiers, key) = ParseHotKey(hotkeyString);
-            if (key == 0)
-            {
-                Logger.Warn($"Invalid hotkey: {hotkeyString}");
-                return -1;
-            }
-            
-            return RegisterHotKey(modifiers, key, action);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"Error registering hotkey '{hotkeyString}'", ex);
-            return -1;
-        }
     }
 }

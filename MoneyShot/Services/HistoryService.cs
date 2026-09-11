@@ -21,10 +21,7 @@ public sealed class HistoryService
 
     public HistoryService()
     {
-        _historyDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MoneyShot",
-            "history");
+        _historyDirectory = Path.Combine(AppDataPaths.GetConfigRoot(), "MoneyShot", "history");
         try
         {
             Directory.CreateDirectory(_historyDirectory);

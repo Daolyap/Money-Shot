@@ -1,17 +1,28 @@
 using System.Drawing.Imaging;
 using System.IO;
-using System.Windows;
 using System.Windows.Media.Imaging;
+using MoneyShot.Abstractions;
+using MoneyShot.Interop;
 
 namespace MoneyShot.Services;
 
 public class SaveService
 {
+    private readonly IClipboard _clipboard;
+
+    public SaveService(IClipboard clipboard)
+    {
+        _clipboard = clipboard;
+    }
+
     public void SaveToClipboard(BitmapSource image)
     {
         try
         {
-            Clipboard.SetImage(image);
+            // Routed through IClipboard (Win32Clipboard on Windows today) rather than
+            // System.Windows.Clipboard directly, so this stays correct once the UI layer moves to
+            // Avalonia — see LINUX_PORT.md § Clipboard image support.
+            _clipboard.SetImage(image.ToCapturedImage());
         }
         catch (Exception ex)
         {

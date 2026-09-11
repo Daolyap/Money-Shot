@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using MoneyShot.Editor;
 using MoneyShot.Models;
+using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
 
 namespace MoneyShot.Views;
@@ -100,7 +101,7 @@ public partial class EditorWindow : Window
     {
         InitializeComponent();
         _originalImage = image;
-        _saveService = new SaveService();
+        _saveService = new SaveService(new Win32Clipboard());
         DisplayImage();
 
         // Add keyboard event handler for Delete key

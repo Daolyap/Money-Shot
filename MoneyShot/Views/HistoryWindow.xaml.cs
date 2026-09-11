@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using MoneyShot.Models;
+using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
 
 namespace MoneyShot.Views;
@@ -12,7 +13,7 @@ namespace MoneyShot.Views;
 public partial class HistoryWindow : Window
 {
     private readonly HistoryService _history;
-    private readonly SaveService _saveService = new();
+    private readonly SaveService _saveService = new(new Win32Clipboard());
 
     public HistoryWindow(HistoryService history)
     {

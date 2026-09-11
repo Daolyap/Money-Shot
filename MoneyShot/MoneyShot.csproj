@@ -24,6 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MoneyShot.Core\MoneyShot.Core.csproj" />
+    <ProjectReference Include="..\MoneyShot.Platform.Windows\MoneyShot.Platform.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="MoneyShot.Tests" />
   </ItemGroup>
 

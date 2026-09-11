@@ -33,17 +33,65 @@ All visual styling lives in `MoneyShot/Themes/CocoaTheme.xaml` (merged in `App.x
 - Code-behind looks styles up with `FindResource` (App-scoped), not `Resources[...]` (window-scoped).
 - The pixelate tool (`CanvasRenderer.CreatePixelatedBrush`) copies only the covered region's pixels once and block-averages in that buffer. Don't go back to rendering the full image into a `RenderTargetBitmap` — at 4K that allocated ~33 MB per pixelation plus a `CroppedBitmap` per block.
 
+### Project split: MoneyShot.Core / MoneyShot.Platform.Windows / MoneyShot.Platform.Linux / MoneyShot / MoneyShot.UI
+
+The solution has six projects — see `LINUX_PORT.md` for the full rationale, what's verified, and
+the remaining gaps (Wayland, mainly). **`MoneyShot` (WPF) is still the shipping app** — the MSI
+installer and CI release pipeline both build it, unchanged; it is Windows-only and always will be
+(WPF has no Linux runtime). `MoneyShot.UI` (Avalonia) is the cross-platform UI: it multi-targets
+`net10.0-windows` and `net10.0`, builds and runs on both Windows and Linux (X11 sessions — see
+`LINUX_PORT.md`'s Wayland-status section), and is packaged for Linux as `.deb`/`.rpm`/AppImage via
+`Packaging/linux/` and `.github/workflows/build-linux.yml`. It is **not** wired into the Windows
+MSI/release pipeline (that stays on the WPF app) — don't touch WPF's behavior when working on
+`MoneyShot.UI`. Before relying on `MoneyShot.UI` for anything beyond what `LINUX_PORT.md` documents
+as verified, read its Phase 1-4 status sections — most core flows (capture, editor, history,
+settings, tray, packaging) are genuinely verified against real Windows and Linux (X11) runs; some
+(`EditorWindow`'s deeper tools, multi-monitor/HiDPI on Linux, Wayland global hotkeys) are not, and
+Wayland capture specifically is implemented but not yet live-verified against a real compositor —
+see `LINUX_PORT.md` § 2.
+
+- **`MoneyShot.Core`** (`net10.0`, no UI/Windows dependency) — Models, `SettingsService`, `Logger`,
+  `AutoUpdateService`, `HotKeyParser`, `AppDataPaths` (resolves the per-user config root —
+  `Environment.SpecialFolder.ApplicationData` alone is not reliable on Linux, see `LINUX_PORT.md`
+  § 8), and the platform abstraction interfaces under `MoneyShot.Abstractions` (`IScreenCapture`,
+  `IGlobalHotkeys`, `ITrayIcon`, `IAutoStart`, `IClipboard`). `CapturedImage` (raw BGRA32 pixels) is
+  the neutral bitmap type Core hands back instead of a WPF `BitmapSource`/Avalonia `Bitmap`.
+- **`MoneyShot.Platform.Windows`** (`net10.0-windows`, no WPF dependency) — `Win32ScreenCapture`,
+  `Win32GlobalHotkeys`, `Win32TrayIcon`, `Win32AutoStart`, `Win32Clipboard`, `MemoryTrimmer`.
+  Deliberately UI-framework-agnostic (references WinForms only for `NotifyIcon`/`Clipboard`, not
+  WPF) so the same implementations work under both `MoneyShot` (WPF) and `MoneyShot.UI` (Avalonia).
+- **`MoneyShot.Platform.Linux`** (`net10.0`, no Avalonia dependency) — `LinuxScreenCapture` (X11
+  `XGetImage` + `xrandr`-parsed monitor bounds on an X11 session; routes to
+  `WaylandPortalScreenCapture`, an `org.freedesktop.portal.Screenshot` call via `Tmds.DBus`, when
+  `$WAYLAND_DISPLAY` is set — implemented but not yet live-verified against a real compositor, see
+  `LINUX_PORT.md` § 2/Phase 4), `LinuxGlobalHotkeys` (X11 `XGrabKey` — still X11-only, no Wayland
+  `GlobalShortcuts` portal yet), `LinuxAutoStart` (XDG `~/.config/autostart/*.desktop`),
+  `LinuxClipboard` (SkiaSharp PNG-encode + `wl-copy`/`xclip`), `LinuxMemoryTrimmer`. See
+  `LINUX_PORT.md`'s Wayland-status section for exactly what works on which session type.
+- **`MoneyShot`** (WPF, Windows-only) — every XAML window, plus `SaveService`/`HistoryService`
+  (`BitmapSource`-based). `Interop/BitmapConversions.cs` converts `CapturedImage` ↔ `BitmapSource`
+  at the UI boundary.
+- **`MoneyShot.UI`** (Avalonia, cross-platform) — every window ported to `.axaml`, plus its own
+  `SaveService`/`HistoryService` (Avalonia `Bitmap`-based, SkiaSharp for JPEG/BMP encoding since
+  Avalonia's own `Bitmap.Save` is PNG-only). `Platform/PlatformServices.cs` is a **compile-time**
+  `#if WINDOWS`-gated factory (not a runtime `OperatingSystem.IsWindows()` check — the two TFMs
+  don't reference the same platform project) that every window calls instead of `new Win32*(...)`;
+  `Platform/LinuxTrayIcon.cs` wraps Avalonia's own cross-platform `TrayIcon`/`NativeMenu` rather
+  than hand-rolling the Linux StatusNotifierItem D-Bus protocol. `Views/SimpleColorDialog.cs` is a
+  small hand-rolled Avalonia color picker used only on the non-Windows build (WinForms'
+  `ColorDialog`, used on Windows, isn't available there).
+
 ### Two windows + service layer (no DI, no MVVM framework)
 
-Services are instantiated directly in `MainWindow` (`MainWindow.xaml.cs:31-35`). There is no DI container and no MVVM library — XAML is wired with code-behind throughout. New services should be added the same way; don't introduce a container for one or two extra dependencies.
+Services are instantiated directly in `MainWindow`'s constructor and `InitializeApplication()`. There is no DI container and no MVVM library — XAML is wired with code-behind throughout. New services should be added the same way; don't introduce a container for one or two extra dependencies.
 
-- **`MainWindow`** — system tray host + capture-mode entry points. Owns the `HotKeyService`, `NotifyIcon`, the auto-update flow, and the `HistoryService`. The window is typically hidden (`StartInTray=true` by default) and only re-shown on error or via tray menu.
+- **`MainWindow`** — system tray host + capture-mode entry points. Owns an `IGlobalHotkeys` (`Win32GlobalHotkeys`), an `ITrayIcon` (`Win32TrayIcon`), the auto-update flow, and the `HistoryService`. The window is typically hidden (`StartInTray=true` by default) and only re-shown on error or via tray menu.
 - **`EditorWindow`** (`Views/EditorWindow.xaml.cs`, ~2000 lines) — the annotation editor. Still heavy code-behind: tool selection, drawing, selection/resize/move, crop, zoom, and save are in this file. The undo stack and rendering helpers were extracted into `MoneyShot/Editor/` (`UndoController`, `CanvasRenderer`, `CanvasPosition`, `ElementResizeMode`, `ElementState`). The `SelectionController` / `AnnotationToolRegistry` split is still pending — see `Opus-Speaks.md` Section A. New annotation tools follow the recipe in `DEVELOPER.md` (enum entry → toolbar button → `Create*` factory → switch case in `Canvas_MouseDown`).
 - **`HistoryWindow`** (`Views/HistoryWindow.xaml.cs`) — opened from the tray "History" menu. Renders a thumbnail grid backed by `HistoryService` (`%AppData%\MoneyShot\history`). Right-click → Open in Editor / Copy to Clipboard / Delete.
 
 ### Capture pipeline (and why the `Thread.Sleep` calls exist)
 
-`ScreenshotService` uses GDI+ (`Graphics.CopyFromScreen`) and converts the `Bitmap` to a WPF `BitmapSource` via `Imaging.CreateBitmapSourceFromHBitmap`, then **must call `DeleteObject` on the HBITMAP** to avoid GDI handle leaks (`ScreenshotService.cs:64-87`). The result is `Freeze()`d so it can cross threads.
+`Win32ScreenCapture` (`MoneyShot.Platform.Windows`) uses GDI+ (`Graphics.CopyFromScreen`) and reads the `Bitmap`'s pixels directly via `LockBits` into a `CapturedImage` — no HBITMAP handle involved, so there's nothing to leak (the old `GetHbitmap`→`CreateBitmapSourceFromHBitmap`→`DeleteObject` dance is gone). `MainWindow` converts the result to a WPF `BitmapSource` via `Interop/BitmapConversions.ToBitmapSource()`, which `Freeze()`s it so it can cross threads.
 
 Before capture, `MainWindow` calls `Hide()` and then `Thread.Sleep(200-300)`. This is intentional — without the delay the window can still be visible in the captured frame. Don't remove these sleeps without an alternative (e.g. waiting for a render-tick confirmation).
 
@@ -51,7 +99,7 @@ For region capture with `HideUiFromScreenshots=true`, the flow captures one **fr
 
 ### Hotkeys (Win32, requires window handle)
 
-`HotKeyService` registers global hotkeys via `RegisterHotKey` and listens for `WM_HOTKEY` through an `HwndSource.AddHook`. It must be `Initialize(window)`d **after** the window's HWND exists — that's why `RegisterHotKeys()` is called from `MainWindow_Loaded`, not the constructor. `ParseHotKey` only understands the modifiers/keys it has explicit cases for (`Ctrl`/`Alt`/`Shift`/`Win` and `PrintScreen`/`0-9`/`F1-F12`); add new keys there if you need them. Settings store hotkeys as strings like `"Ctrl+PrintScreen"`.
+`Win32GlobalHotkeys` (`MoneyShot.Platform.Windows`, implements `IGlobalHotkeys`) registers global hotkeys via `RegisterHotKey` and listens for `WM_HOTKEY` on its own dedicated message-only window (`HWND_MESSAGE`) that it creates via a WinForms `NativeWindow` (not WPF's `HwndSource.AddHook` — this project has no WPF dependency, see the project-split note above). `IGlobalHotkeys.Initialize()` takes no window handle — hotkey registration is independent of whether/when the app's own main window exists, which matters for the Avalonia build (`MoneyShot.UI`, see `LINUX_PORT.md` Phase 1), which can start with no window ever created (`StartInTray`). `RegisterHotKeys()` is still called from `MainWindow.InitializeApplication()` rather than the constructor, but only because settings need to be loaded first, not because of any HWND ordering requirement now. Hotkey-string parsing (`HotKeyParser.ParseHotKey`, in `MoneyShot.Core`) only understands the modifiers/keys it has explicit cases for (`Ctrl`/`Alt`/`Shift`/`Win` and `PrintScreen`/`0-9`/`F1-F12`); add new keys there if you need them. Settings store hotkeys as strings like `"Ctrl+PrintScreen"`.
 
 When hotkeys are reconfigured in settings, call `MainWindow.ReloadHotKeys()` — it unregisters all and re-registers from the new settings.
 
@@ -61,9 +109,9 @@ When hotkeys are reconfigured in settings, call `MainWindow.ReloadHotKeys()` —
 - Resolves `DefaultSavePath` via `Path.GetFullPath` and falls back to `MyPictures` if it's invalid/relative/too-long — **don't bypass this**, it prevents path traversal from a tampered settings file.
 - Clamps `DefaultLineThickness` to `[1, 20]` and validates `DefaultFileFormat` against an allowlist.
 
-Two registry-backed settings live here too:
-- `SetStartupWithWindows` — `HKCU\...\Run`.
-- `SetWindowsPrintScreenDisabled` — `HKCU\Control Panel\Keyboard\PrintScreenKeyForSnippingEnabled`. This globally suppresses Windows' built-in Snipping Tool hotkey so MoneyShot can claim PrintScreen.
+Two registry-backed settings used to live on `SettingsService` itself; they now live behind `IAutoStart` (`Win32AutoStart` in `MoneyShot.Platform.Windows`) so `SettingsService` has no Windows-specific dependency:
+- `SetStartupWithApp` — `HKCU\...\Run`.
+- `SetPrintScreenSuppressed` — `HKCU\Control Panel\Keyboard\PrintScreenKeyForSnippingEnabled`. This globally suppresses Windows' built-in Snipping Tool hotkey so MoneyShot can claim PrintScreen.
 
 ### Auto-update
 

@@ -2,7 +2,9 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Input;
+using MoneyShot.Abstractions;
 using MoneyShot.Models;
+using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
 using Application = System.Windows.Application;
 
@@ -11,12 +13,16 @@ namespace MoneyShot.Views;
 public partial class SettingsWindow : Window
 {
     private readonly SettingsService _settingsService;
+    private readonly IScreenCapture _screenCapture;
+    private readonly IAutoStart _autoStart;
     private AppSettings _settings;
 
     public SettingsWindow()
     {
         InitializeComponent();
         _settingsService = new SettingsService();
+        _screenCapture = new Win32ScreenCapture();
+        _autoStart = new Win32AutoStart();
         _settings = _settingsService.LoadSettings();
         LoadSettings();
         LoadMonitorHotkeysInfo();
@@ -24,9 +30,8 @@ public partial class SettingsWindow : Window
 
     private void LoadMonitorHotkeysInfo()
     {
-        var screenshotService = new ScreenshotService();
-        var screens = screenshotService.GetAllScreens();
-        
+        var screens = _screenCapture.GetAllMonitors();
+
         if (screens.Count > 1)
         {
             var hotkeys = new StringBuilder();
@@ -50,7 +55,7 @@ public partial class SettingsWindow : Window
         MinimizeToTrayCheckbox.IsChecked = _settings.MinimizeToTray;
         CheckForUpdatesCheckbox.IsChecked = _settings.CheckForUpdatesOnStartup;
         HideUiFromScreenshotsCheckbox.IsChecked = _settings.HideUiFromScreenshots;
-        if (_settingsService.TryGetWindowsPrintScreenDisabled(out var isPrintScreenDisabled))
+        if (_autoStart.TryGetPrintScreenSuppressed(out var isPrintScreenDisabled))
         {
             _settings.DisableWindowsPrintScreen = isPrintScreenDisabled;
         }
@@ -155,15 +160,15 @@ public partial class SettingsWindow : Window
             
             try
             {
-                _settingsService.SetStartupWithWindows(_settings.RunOnStartup);
+                _autoStart.SetStartupWithApp(_settings.RunOnStartup);
             }
             catch (InvalidOperationException ex)
             {
-                MessageBox.Show($"Warning: {ex.Message}\nOther settings were saved successfully.", 
+                MessageBox.Show($"Warning: {ex.Message}\nOther settings were saved successfully.",
                     "Partial Success", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
-            
-            var printScreenApplied = _settingsService.SetWindowsPrintScreenDisabled(_settings.DisableWindowsPrintScreen);
+
+            var printScreenApplied = _autoStart.SetPrintScreenSuppressed(_settings.DisableWindowsPrintScreen);
 
             // Reload hotkeys in the main window
             if (Application.Current.MainWindow is MainWindow mainWindow)

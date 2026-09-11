@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <!--
+    Deliberately no <UseWPF>. This project is the Windows OS-integration layer, orthogonal to the
+    UI framework (WPF today, Avalonia after the Linux-port UI migration — see LINUX_PORT.md). It
+    references WindowsForms only for NotifyIcon/Clipboard, both of which work independent of WPF.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MoneyShot.Core\MoneyShot.Core.csproj" />
+  </ItemGroup>
+
+</Project>

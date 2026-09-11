@@ -1,15 +1,17 @@
 using System.Runtime;
 using System.Runtime.InteropServices;
 
-namespace MoneyShot.Services;
+namespace MoneyShot.Platform.Windows;
 
 /// <summary>
 /// Releases the large native/managed bitmap backings the editor leaves behind and asks Windows
 /// to trim the working set. Without this a tray app that should idle near ~80 MB sits at several
 /// hundred MB after the editor closes, until the next major GC happens on its own schedule.
-/// Shared by every code path that closes an <c>EditorWindow</c> (capture flow and history).
+/// Shared by every UI build that closes an editor window (WPF's EditorWindow and the Avalonia
+/// build's — see LINUX_PORT.md Phase 1) — moved here from the WPF project since both need it and
+/// it's genuinely Windows-specific OS interaction.
 /// </summary>
-internal static class MemoryTrimmer
+public static class MemoryTrimmer
 {
     public static void TrimAfterEditorClose()
     {
@@ -26,7 +28,7 @@ internal static class MemoryTrimmer
         }
         catch (Exception ex)
         {
-            Logger.Warn("Could not release editor memory", ex);
+            MoneyShot.Services.Logger.Warn("Could not release editor memory", ex);
         }
     }
 

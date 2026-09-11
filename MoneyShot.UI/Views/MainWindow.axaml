@@ -1,0 +1,135 @@
+<Window x:Class="MoneyShot.UI.Views.MainWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Money Shot" Height="600" Width="720"
+        Icon="avares://MoneyShot.UI/Assets/icon.png"
+        MinHeight="500" MinWidth="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Cocoa.WindowBrush}"
+        Foreground="{StaticResource Cocoa.TextBrush}"
+        FontFamily="Segoe UI"
+        ExtendClientAreaToDecorationsHint="True"
+        WindowDecorations="None"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        CanResize="True">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ░░ Title bar ░░ -->
+        <Border Grid.Row="0" Background="{StaticResource Cocoa.TitleBarBrush}"
+                BorderBrush="{StaticResource Cocoa.BorderSubtleBrush}" BorderThickness="0,0,0,1"
+                PointerPressed="TitleBar_PointerPressed">
+            <Grid Height="32">
+                <TextBlock Text="Money Shot" FontSize="12.5" FontWeight="SemiBold"
+                           Foreground="{StaticResource Cocoa.TextBrush}"
+                           VerticalAlignment="Center" Margin="14,0,0,0"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Click="Minimize_Click" Theme="{StaticResource TitleBarButton}" Focusable="False">
+                        <Path Theme="{StaticResource CaptionIcon}" Data="{StaticResource Icon.WindowMinimize}"/>
+                    </Button>
+                    <Button Name="MaximizeRestoreButton" Click="MaximizeRestore_Click"
+                            Theme="{StaticResource TitleBarButton}" Focusable="False">
+                        <Path Name="MaximizeRestoreIcon" Theme="{StaticResource CaptionIcon}"
+                              Data="{StaticResource Icon.WindowMaximize}"/>
+                    </Button>
+                    <Button Click="Close_Click" Theme="{StaticResource TitleBarCloseButton}" Focusable="False">
+                        <Path Theme="{StaticResource CaptionIcon}" Data="{StaticResource Icon.WindowClose}"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ░░ Content ░░ -->
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <Grid Margin="36,28">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <StackPanel Grid.Row="0" Margin="0,0,0,26">
+                    <TextBlock Text="Money Shot" FontSize="30" FontWeight="Bold"
+                               Foreground="{StaticResource Cocoa.TextBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Capture, annotate, and share screenshots"
+                               FontSize="13" Foreground="{StaticResource Cocoa.TextSecondaryBrush}"
+                               HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                </StackPanel>
+
+                <!-- Capture options -->
+                <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <Border Theme="{StaticResource CocoaCard}" Padding="26" Margin="0,0,0,18" MinWidth="380" MaxWidth="520">
+                        <StackPanel>
+                            <TextBlock Text="Capture" FontSize="15" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Cocoa.TextBrush}" Margin="0,0,0,16"/>
+
+                            <Button Name="CaptureFullScreenButton" Click="CaptureFullScreen_Click"
+                                    Theme="{StaticResource AccentButton}" Padding="16,11" Margin="0,0,0,8"
+                                    HorizontalContentAlignment="Left"
+                                    ToolTip.Tip="Capture all screens (hotkey: Print Screen)">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Camera}"
+                                          Stroke="{StaticResource Cocoa.OnAccentBrush}"/>
+                                    <TextBlock Text="Capture full screen" FontSize="13" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button Name="CaptureRegionButton" Click="CaptureRegion_Click"
+                                    Theme="{StaticResource AccentButton}" Padding="16,11"
+                                    HorizontalContentAlignment="Left"
+                                    ToolTip.Tip="Select a region to capture (hotkey: Ctrl+Print Screen)">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Region}"
+                                          Stroke="{StaticResource Cocoa.OnAccentBrush}"/>
+                                    <TextBlock Text="Capture region" FontSize="13" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Individual monitor captures (populated dynamically) -->
+                            <StackPanel Name="MonitorButtonsPanel" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Quick actions -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Click="Settings_Click" Theme="{StaticResource SubtleButton}" Padding="13,8" Margin="4,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Settings}"/>
+                                <TextBlock Text="Settings" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Click="History_Click" Theme="{StaticResource SubtleButton}" Padding="13,8" Margin="4,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.History}"/>
+                                <TextBlock Text="History" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Click="CheckForUpdates_Click" Theme="{StaticResource SubtleButton}" Padding="13,8" Margin="4,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Refresh}"/>
+                                <TextBlock Text="Updates" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Click="About_Click" Theme="{StaticResource SubtleButton}" Padding="13,8" Margin="4,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Theme="{StaticResource ToolIcon}" Data="{StaticResource Icon.Info}"/>
+                                <TextBlock Text="About" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Footer -->
+                <TextBlock Grid.Row="2" Margin="0,22,0,4"
+                           Text="Tip: hotkeys are customizable in Settings — the app keeps running in the system tray."
+                           FontSize="11.5" Foreground="{StaticResource Cocoa.TextMutedBrush}"
+                           HorizontalAlignment="Center" TextWrapping="Wrap"/>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Window>

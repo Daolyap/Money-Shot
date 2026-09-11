@@ -1,4 +1,5 @@
 using System.IO;
+using MoneyShot.Platform.Windows;
 using MoneyShot.Services;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace MoneyShot.Tests;
 
 public class SaveServiceTests
 {
-    private readonly SaveService _service = new();
+    private readonly SaveService _service = new(new Win32Clipboard());
 
     // Path validation runs before the image is touched, so a null image never reaches the
     // encoder for these rejection cases — no WPF/STA setup needed.

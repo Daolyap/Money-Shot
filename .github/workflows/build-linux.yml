@@ -1,0 +1,114 @@
+name: Build Money Shot (Linux)
+
+# Mirrors build.yml's triggers so the Linux build gets exercised on every PR and every GitHub
+# Release alongside the Windows build — see LINUX_PORT.md Phase 2/3. Builds MoneyShot.UI (the
+# Avalonia UI — MoneyShot itself, the WPF app, is Windows-only and has no Linux build) and packages
+# it as .deb, .rpm, and an AppImage.
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Extract version from project file
+      id: get_version
+      run: |
+        set -euo pipefail
+        version=$(grep -oPm1 '(?<=<Version>)[^<]+' MoneyShot.UI/MoneyShot.UI.csproj)
+        if [ -z "$version" ]; then
+          echo "::error::Version property not found in MoneyShot.UI.csproj" >&2
+          exit 1
+        fi
+        build_number="${GITHUB_RUN_NUMBER:-0}"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+
+    - name: Restore dependencies
+      run: dotnet restore MoneyShot.UI/MoneyShot.UI.csproj
+
+    - name: Build (compile check, both platform-neutral parts)
+      run: dotnet build MoneyShot.UI/MoneyShot.UI.csproj -f net10.0 --configuration Release --no-restore
+
+    - name: Publish (self-contained linux-x64)
+      run: |
+        dotnet publish MoneyShot.UI/MoneyShot.UI.csproj -f net10.0 -r linux-x64 --self-contained true \
+          --configuration Release -o ./publish-linux \
+          /p:AssemblyVersion=${{ steps.get_version.outputs.version }}.${{ steps.get_version.outputs.build_number }} \
+          /p:FileVersion=${{ steps.get_version.outputs.version }}.${{ steps.get_version.outputs.build_number }}
+
+    - name: Install packaging tools
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq dpkg-dev rpm file
+
+    - name: Build .deb
+      run: |
+        chmod +x Packaging/linux/build-deb.sh
+        ./Packaging/linux/build-deb.sh ./publish-linux \
+          "${{ steps.get_version.outputs.version }}-${{ steps.get_version.outputs.build_number }}" \
+          ./MoneyShot-v${{ steps.get_version.outputs.version }}-build.${{ steps.get_version.outputs.build_number }}_amd64.deb
+
+    - name: Build .rpm
+      run: |
+        chmod +x Packaging/linux/build-rpm.sh
+        ./Packaging/linux/build-rpm.sh ./publish-linux \
+          "${{ steps.get_version.outputs.version }}" \
+          ./rpm-out \
+          "${{ steps.get_version.outputs.build_number }}"
+        mv ./rpm-out/*.rpm ./MoneyShot-v${{ steps.get_version.outputs.version }}-build.${{ steps.get_version.outputs.build_number }}.x86_64.rpm
+
+    - name: Download appimagetool
+      run: |
+        curl -sL -o /tmp/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+        chmod +x /tmp/appimagetool
+
+    - name: Build AppImage
+      run: |
+        chmod +x Packaging/linux/build-appimage.sh
+        # appimagetool is itself an AppImage that needs FUSE to mount normally — GitHub-hosted
+        # runners don't have /dev/fuse set up for unprivileged use, so extract-and-run instead.
+        cat > /tmp/appimagetool-wrapper.sh <<'EOF'
+        #!/bin/bash
+        exec /tmp/appimagetool --appimage-extract-and-run "$@"
+        EOF
+        chmod +x /tmp/appimagetool-wrapper.sh
+        APPIMAGETOOL=/tmp/appimagetool-wrapper.sh ./Packaging/linux/build-appimage.sh ./publish-linux \
+          "${{ steps.get_version.outputs.version }}" \
+          ./MoneyShot-v${{ steps.get_version.outputs.version }}-build.${{ steps.get_version.outputs.build_number }}-x86_64.AppImage
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: MoneyShot-Linux-Build
+        path: |
+          ./*.deb
+          ./*.rpm
+          ./*.AppImage
+
+    - name: Upload release assets
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+      with:
+        files: |
+          ./*.deb
+          ./*.rpm
+          ./*.AppImage
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
