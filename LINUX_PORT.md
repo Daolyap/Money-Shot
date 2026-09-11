@@ -18,23 +18,28 @@
 > session (`$WAYLAND_DISPLAY`) and routes to `WaylandPortalScreenCapture`
 > (`org.freedesktop.portal.Screenshot` via `Tmds.DBus`) instead of X11 `XGetImage`, which does not
 > see native Wayland content. This closes the exact failure a real user hit on Fedora KDE (Plasma
-> Wayland, Fedora's and current Debian's default session type) — see § Wayland status. **This code
-> compiles clean and its D-Bus proxy/signal shapes were verified against Tmds.DBus's own documented
-> API and a real working example (its NetworkManager how-to), but it was not live-tested against a
-> real portal backend this round** — Docker Desktop hit an unrelated startup bug
-> (`sailor-ingest.sock` stale-rename failure) on this machine that a normal restart/WSL-shutdown
-> couldn't clear, blocking the headless-compositor test container that would have exercised it
-> end-to-end. Global hotkeys remain X11-only — `org.freedesktop.portal.GlobalShortcuts` (a larger,
+> Wayland, Fedora's and current Debian's default session type) — see § Wayland status. The first
+> build of this (2026-09-10) crashed on **every** capture attempt — confirmed by the same user's
+> real crash log from a Fedora KDE run: `Tmds.DBus.Connection.CreateProxy<T>` builds its proxy via
+> `Reflection.Emit` in a separate dynamic assembly, which cannot implement an `internal` interface,
+> so `IScreenshotPortal`/`IPortalRequest` (declared `internal` in the first pass) threw
+> `TypeLoadException` on every attempt. Fixed 2026-09-11 by making both `public` — this was **found
+> from a real log, not caught locally**, because Docker Desktop hit an unrelated startup bug on the
+> dev machine (`sailor-ingest.sock` stale-rename failure, survived a restart/WSL-shutdown) that
+> blocked the headless-compositor container test that would have caught it before shipping. The fix
+> is a direct match for the exact reported stack trace and rebuilds/tests clean, but **has not yet
+> been confirmed successful on a real machine** — the user's next real-world attempt is the actual
+> verification. Global hotkeys remain X11-only — `org.freedesktop.portal.GlobalShortcuts` (a larger,
 > separately-scoped feature) was not attempted. See § Phase 4 status for the exact verified/
 > not-verified breakdown.
 >
 > **Remaining real gaps**: Wayland global hotkeys (portal `GlobalShortcuts`, not attempted — tray
-> menu/in-app buttons remain the working alternative), the new Wayland capture path's live behavior
-> against a real compositor (see above), per-monitor capture under Wayland (portal has no per-output
-> selector outside the heavier ScreenCast API — see § 2), the tray icon has not been confirmed
-> against a real desktop's StatusNotifierWatcher (only confirmed to not crash without one), and
-> `EditorWindow`'s deeper tool interactions (resize, crop, zoom/pan, pixelate) were verified on
-> Windows but not separately re-verified on Linux. See § Migration phases for the full
+> menu/in-app buttons remain the working alternative), confirming the Wayland capture fix actually
+> works end-to-end on a real machine (see above), per-monitor capture under Wayland (portal has no
+> per-output selector outside the heavier ScreenCast API — see § 2), the tray icon has not been
+> confirmed against a real desktop's StatusNotifierWatcher (only confirmed to not crash without
+> one), and `EditorWindow`'s deeper tool interactions (resize, crop, zoom/pan, pixelate) were
+> verified on Windows but not separately re-verified on Linux. See § Migration phases for the full
 > verified-vs-not breakdown per phase.
 
 ## TL;DR
@@ -114,19 +119,24 @@ waits for the async `Request.Response` signal, and decodes the returned PNG (via
 `Task<IDisposable> WatchResponseAsync(Action<(uint, IDictionary<string,object>)>, ...)`,
 `IDictionary<string,object>` for `a{sv}`) were checked against Tmds.DBus's own published modelling
 docs and a real, complete working example (its NetworkManager `WatchStateChangedAsync` how-to) —
-not guessed from memory. **Not verified**: an actual round trip against a running portal backend
-(`xdg-desktop-portal` + `xdg-desktop-portal-kde`/`-gnome`/`-wlr`). This session's plan was to
-exercise it against a headless `sway` (wlroots) compositor + `xdg-desktop-portal-wlr` in a Docker
-container — the same kind of standalone-harness verification that caught the X11 capture path's
-real bugs — but Docker Desktop hit an unrelated startup bug on this machine (`sailor-ingest.sock`
-failed its internal stale-rename with "The file cannot be accessed by the system"; a full engine
-restart, deleting the stale socket via PowerShell/cmd/bash, and `wsl --shutdown` all failed to clear
-it) that blocked starting any container this session. **Treat the Wayland capture path as
-implemented-but-unverified until it's exercised against a real compositor** — the most likely risk
-areas if something's wrong: the D-Bus proxy method-name-to-signal-name mapping convention, the
-`handle_token`/response-race assumption (see the code's own comment on this), or a portal backend
-returning the `uri` result in a shape (e.g. always via the document portal, always requiring a
-`file://` URI with the caller's own read access) other than what's coded for.
+not guessed from memory. **Round-tripped through one real bug already**: the first build (2026-09-
+10) crashed on every capture attempt with `TypeLoadException: ... attempting to implement an
+inaccessible interface` (`IScreenshotPortal`/`IPortalRequest` were declared `internal`, and
+`Tmds.DBus.Connection.CreateProxy<T>` builds its proxy via `Reflection.Emit` in a separate dynamic
+assembly that can't implement an internal interface) — caught from a real crash log off a Fedora
+KDE run (not caught locally, since Docker Desktop hit an unrelated startup bug on the dev machine —
+`sailor-ingest.sock` failed its internal stale-rename with "The file cannot be accessed by the
+system"; a full engine restart, deleting the stale socket via PowerShell/cmd/bash, and
+`wsl --shutdown` all failed to clear it — blocking the headless-`sway`-compositor container test
+that would have caught this before shipping). Fixed 2026-09-11 by making both interfaces `public`,
+matching every proxy-interface example in Tmds.DBus's own docs. **Still not verified**: a
+successful end-to-end capture on a real machine — the fix directly matches the reported stack
+trace and the solution rebuilds/tests clean, but no one has yet seen this actually produce a
+screenshot. **Treat the Wayland capture path as implemented-and-crash-fixed-but-not-yet-confirmed-
+working** — remaining risk areas if it still doesn't produce a screenshot: the `handle_token`/
+response-race assumption (see the code's own comment on this), or a portal backend returning the
+`uri` result in a shape (e.g. always via the document portal, always requiring a `file://` URI with
+the caller's own read access) other than what's coded for.
 
 Only full-desktop capture is portal-based; there is no portal equivalent to xrandr's per-monitor
 geometry outside the much heavier ScreenCast API (which requires an interactive source-picker UI
